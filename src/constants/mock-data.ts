@@ -7,7 +7,6 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
     createdAt: '2026-09-19T18:22:00.000Z',
     lastMessageAt: '2026-09-19T18:26:00.000Z',
     isPinned: true,
-    hasAudio: true,
     messages: [
       {
         id: 'c1-m1',
@@ -42,7 +41,6 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
     createdAt: '2026-09-17T20:05:00.000Z',
     lastMessageAt: '2026-09-17T20:11:00.000Z',
     isPinned: false,
-    hasAudio: false,
     messages: [
       {
         id: 'c2-m1',
@@ -77,7 +75,6 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
     createdAt: '2026-09-12T22:40:00.000Z',
     lastMessageAt: '2026-09-12T22:47:00.000Z',
     isPinned: false,
-    hasAudio: true,
     messages: [
       {
         id: 'c3-m1',

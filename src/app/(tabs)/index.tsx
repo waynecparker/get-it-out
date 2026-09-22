@@ -1,24 +1,22 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
+import { AudioPlayButton } from '@/components/audio-play-button';
 import { Button } from '@/components/button';
 import { MicGlyph } from '@/components/mic-glyph';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import {
-  MOCK_FOLLOWUPS,
-  MOCK_INITIAL_REPLIES,
-  MOCK_TRANSCRIPTS,
-  RESPONSE_MODE_LABELS,
-  pickRandom,
-} from '@/constants/mock-conversation';
+import { RESPONSE_MODE_LABELS } from '@/constants/mock-conversation';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useVoiceRecorder } from '@/hooks/use-voice-recorder';
+import { aiResponseProvider, transcriptionProvider } from '@/services/providers';
 import { useConversations } from '@/state/conversations-context';
 import { Conversation, Message, ResponseMode } from '@/types/conversation';
 
-type Status = 'idle' | 'recording' | 'paused' | 'transcribing' | 'reviewing' | 'responded';
+type Phase = 'idle' | 'recording' | 'paused' | 'transcribing' | 'reviewing' | 'responded';
 
 function formatDuration(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
@@ -39,31 +37,19 @@ function deriveTitle(text: string) {
 export default function TalkScreen() {
   const theme = useTheme();
   const { addConversation } = useConversations();
+  const recorder = useVoiceRecorder();
 
-  const [status, setStatus] = useState<Status>('idle');
-  const [seconds, setSeconds] = useState(0);
+  const [phase, setPhase] = useState<Phase>('idle');
+  const [audioUri, setAudioUri] = useState<string | null>(null);
   const [transcript, setTranscript] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [typedInput, setTypedInput] = useState('');
   const [hasChosenMode, setHasChosenMode] = useState(false);
 
   const [pulse] = useState(() => new Animated.Value(1));
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (status === 'recording') {
-      intervalRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
-    } else if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [status]);
-
-  useEffect(() => {
-    if (status !== 'recording') {
+    if (phase !== 'recording') {
       pulse.setValue(1);
       return;
     }
@@ -75,92 +61,105 @@ export default function TalkScreen() {
     );
     loop.start();
     return () => loop.stop();
-  }, [status, pulse]);
+  }, [phase, pulse]);
 
-  function startRecording() {
-    setSeconds(0);
-    setStatus('recording');
+  async function startRecording() {
+    const started = await recorder.start();
+    if (!started) return;
+    setPhase('recording');
   }
 
   function pauseRecording() {
-    setStatus('paused');
+    recorder.pause();
+    setPhase('paused');
   }
 
   function resumeRecording() {
-    setStatus('recording');
+    recorder.resume();
+    setPhase('recording');
   }
 
-  function cancelRecording() {
-    setStatus('idle');
-    setSeconds(0);
+  const backPhase = messages.length > 0 ? 'responded' : 'idle';
+
+  async function cancelRecording() {
+    await recorder.cancel();
+    setAudioUri(null);
+    setPhase(backPhase);
   }
 
-  function finishRecording() {
-    setStatus('transcribing');
-    setTimeout(() => {
-      setTranscript(pickRandom(MOCK_TRANSCRIPTS));
-      setStatus('reviewing');
-    }, 700);
+  async function finishRecording() {
+    setPhase('transcribing');
+    const uri = await recorder.finish();
+    setAudioUri(uri);
+    if (!uri) {
+      setPhase(backPhase);
+      return;
+    }
+    const text = await transcriptionProvider.transcribe(uri);
+    setTranscript(text);
+    setPhase('reviewing');
   }
 
   function discardReview() {
-    setStatus('idle');
-    setSeconds(0);
+    recorder.discard(audioUri);
+    setAudioUri(null);
     setTranscript('');
+    setPhase(backPhase);
   }
 
-  function submitTranscript() {
+  async function submitTranscript() {
+    const isFollowUp = messages.length > 0;
     const userMessage: Message = {
       id: makeId(),
       role: 'user',
       content: transcript,
       createdAt: new Date().toISOString(),
+      audioUri: audioUri ?? undefined,
     };
-    setMessages([userMessage]);
-    setStatus('responded');
-    setTimeout(() => {
-      const reply: Message = {
-        id: makeId(),
-        role: 'assistant',
-        content: pickRandom(MOCK_INITIAL_REPLIES),
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, reply]);
-    }, 500);
+    const history = messages;
+    setMessages((prev) => (isFollowUp ? [...prev, userMessage] : [userMessage]));
+    setAudioUri(null);
+    setPhase('responded');
+    const reply = await aiResponseProvider.generateReply({
+      transcript,
+      history: isFollowUp ? history : [],
+    });
+    setMessages((prev) => [
+      ...prev,
+      { id: makeId(), role: 'assistant', content: reply.content, createdAt: new Date().toISOString() },
+    ]);
   }
 
-  function chooseMode(mode: ResponseMode) {
+  async function chooseMode(mode: ResponseMode) {
     setHasChosenMode(true);
-    setTimeout(() => {
-      const reply: Message = {
-        id: makeId(),
-        role: 'assistant',
-        content: MOCK_FOLLOWUPS[mode],
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, reply]);
-    }, 400);
+    const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
+    const reply = await aiResponseProvider.generateReply({
+      transcript: lastUserMessage?.content ?? '',
+      history: messages,
+      responseMode: mode,
+    });
+    setMessages((prev) => [
+      ...prev,
+      { id: makeId(), role: 'assistant', content: reply.content, createdAt: new Date().toISOString() },
+    ]);
   }
 
-  function sendTyped() {
-    if (!typedInput.trim()) return;
+  async function sendTyped() {
+    const text = typedInput.trim();
+    if (!text) return;
     const userMessage: Message = {
       id: makeId(),
       role: 'user',
-      content: typedInput.trim(),
+      content: text,
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, userMessage]);
     setTypedInput('');
-    setTimeout(() => {
-      const reply: Message = {
-        id: makeId(),
-        role: 'assistant',
-        content: pickRandom(MOCK_INITIAL_REPLIES),
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, reply]);
-    }, 500);
+    const reply = await aiResponseProvider.generateReply({ transcript: text, history: messages });
+    setMessages((prev) => [
+      ...prev,
+      { id: makeId(), role: 'assistant', content: reply.content, createdAt: new Date().toISOString() },
+    ]);
   }
 
   function saveAndReset() {
@@ -172,31 +171,35 @@ export default function TalkScreen() {
       createdAt: messages[0]?.createdAt ?? now,
       lastMessageAt: now,
       isPinned: false,
-      hasAudio: true,
       messages,
     };
     addConversation(conversation);
-    setStatus('idle');
-    setSeconds(0);
+    setPhase('idle');
+    setAudioUri(null);
     setTranscript('');
     setMessages([]);
     setHasChosenMode(false);
     router.push('/history');
   }
 
-  if (status === 'reviewing' || status === 'transcribing') {
+  if (phase === 'reviewing' || phase === 'transcribing') {
     return (
       <Screen>
         <ThemedText type="subtitle" style={styles.reviewTitle}>
-          {status === 'transcribing' ? 'Transcribing…' : "Here's what we caught"}
+          {phase === 'transcribing' ? 'Transcribing…' : "Here's what we caught"}
         </ThemedText>
-        {status === 'transcribing' ? (
+        {phase === 'transcribing' ? (
           <ThemedText themeColor="textSecondary">One sec.</ThemedText>
         ) : (
           <>
             <ThemedText themeColor="textSecondary" style={styles.reviewHint}>
               Fix anything that&apos;s off, then continue.
             </ThemedText>
+            {audioUri && (
+              <View style={styles.playbackRow}>
+                <AudioPlayButton uri={audioUri} />
+              </View>
+            )}
             <TextInput
               value={transcript}
               onChangeText={setTranscript}
@@ -220,7 +223,7 @@ export default function TalkScreen() {
     );
   }
 
-  if (status === 'responded') {
+  if (phase === 'responded') {
     const lastMessage = messages[messages.length - 1];
     const showChoices = lastMessage?.role === 'assistant' && !hasChosenMode;
 
@@ -240,6 +243,11 @@ export default function TalkScreen() {
               <ThemedText style={message.role === 'user' ? styles.bubbleUserText : undefined}>
                 {message.content}
               </ThemedText>
+              {message.audioUri && (
+                <View style={styles.bubbleAudio}>
+                  <AudioPlayButton uri={message.audioUri} tint="#14161A" />
+                </View>
+              )}
             </View>
           ))}
 
@@ -263,6 +271,12 @@ export default function TalkScreen() {
             style={[styles.composerInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
             onSubmitEditing={sendTyped}
           />
+          <Pressable
+            onPress={startRecording}
+            style={[styles.composerMicButton, { backgroundColor: theme.accent }]}
+          >
+            <Ionicons name="mic" size={20} color="#14161A" />
+          </Pressable>
           <Button onPress={sendTyped} style={styles.sendButton}>
             Send
           </Button>
@@ -276,28 +290,28 @@ export default function TalkScreen() {
     );
   }
 
-  const isRecordingOrPaused = status === 'recording' || status === 'paused';
+  const isRecordingOrPaused = phase === 'recording' || phase === 'paused';
 
   return (
     <Screen>
       <View style={styles.talkContent}>
         {isRecordingOrPaused && (
           <ThemedText type="title" style={styles.timer}>
-            {formatDuration(seconds)}
+            {formatDuration(Math.floor(recorder.durationMillis / 1000))}
           </ThemedText>
         )}
 
         <Animated.View style={{ transform: [{ scale: pulse }] }}>
           <Pressable
             onPress={() => {
-              if (status === 'idle') startRecording();
-              else if (status === 'paused') resumeRecording();
+              if (phase === 'idle') startRecording();
+              else if (phase === 'paused') resumeRecording();
               else finishRecording();
             }}
             style={[styles.micButton, { backgroundColor: theme.accent }]}
           >
             <MicGlyph
-              mode={status === 'recording' ? 'recording' : status === 'paused' ? 'paused' : 'idle'}
+              mode={phase === 'recording' ? 'recording' : phase === 'paused' ? 'paused' : 'idle'}
               color="#14161A"
               size={64}
             />
@@ -305,9 +319,12 @@ export default function TalkScreen() {
         </Animated.View>
 
         <ThemedText themeColor="textSecondary" style={styles.talkHint}>
-          {status === 'idle' && "Tap to talk. Say what's on your mind."}
-          {status === 'recording' && 'Tap the button to finish.'}
-          {status === 'paused' && 'Tap to resume.'}
+          {recorder.permissionDenied
+            ? "Microphone access is off. Enable it in your phone's settings to record."
+            : null}
+          {!recorder.permissionDenied && phase === 'idle' && "Tap to talk. Say what's on your mind."}
+          {!recorder.permissionDenied && phase === 'recording' && 'Tap the button to finish.'}
+          {!recorder.permissionDenied && phase === 'paused' && 'Tap to resume.'}
         </ThemedText>
 
         {isRecordingOrPaused && (
@@ -315,7 +332,7 @@ export default function TalkScreen() {
             <Button variant="secondary" onPress={cancelRecording} style={styles.flexButton}>
               Cancel
             </Button>
-            {status === 'recording' ? (
+            {phase === 'recording' ? (
               <Button variant="secondary" onPress={pauseRecording} style={styles.flexButton}>
                 Pause
               </Button>
@@ -366,7 +383,10 @@ const styles = StyleSheet.create({
   },
   reviewHint: {
     marginTop: Spacing.one,
-    marginBottom: Spacing.four,
+    marginBottom: Spacing.three,
+  },
+  playbackRow: {
+    marginBottom: Spacing.three,
   },
   transcriptInput: {
     minHeight: 140,
@@ -402,6 +422,9 @@ const styles = StyleSheet.create({
   bubbleUserText: {
     color: '#14161A',
   },
+  bubbleAudio: {
+    marginTop: Spacing.two,
+  },
   choices: {
     gap: Spacing.two,
     marginTop: Spacing.two,
@@ -422,6 +445,13 @@ const styles = StyleSheet.create({
   },
   sendButton: {
     paddingHorizontal: Spacing.three,
+  },
+  composerMicButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   doneRow: {
     alignItems: 'center',

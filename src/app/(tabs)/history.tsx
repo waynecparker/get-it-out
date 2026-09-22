@@ -41,6 +41,7 @@ export default function HistoryScreen() {
 
   function renderItem({ item }: { item: Conversation }) {
     const lastMessage = item.messages[item.messages.length - 1];
+    const recordingCount = item.messages.filter((m) => m.audioUri).length;
     return (
       <Pressable
         onPress={() => router.push(`/history/${item.id}`)}
@@ -61,7 +62,7 @@ export default function HistoryScreen() {
         </ThemedText>
         <ThemedText type="small" themeColor="textMuted" style={styles.cardMeta}>
           {formatDateTime(item.lastMessageAt)}
-          {item.hasAudio ? ' · audio saved' : ''}
+          {recordingCount > 0 ? ` · ${recordingCount} recording${recordingCount > 1 ? 's' : ''}` : ''}
         </ThemedText>
       </Pressable>
     );

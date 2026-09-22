@@ -8,6 +8,9 @@ export interface Message {
   content: string;
   createdAt: string;
   responseMode?: ResponseMode;
+  // Each user message can carry its own recording — a follow-up must never
+  // overwrite an earlier one, so audio lives per-message, not per-conversation.
+  audioUri?: string;
 }
 
 export interface Conversation {
@@ -16,7 +19,6 @@ export interface Conversation {
   createdAt: string;
   lastMessageAt: string;
   isPinned: boolean;
-  hasAudio: boolean;
   messages: Message[];
 }
 
