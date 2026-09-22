@@ -28,6 +28,7 @@ const APP_ROWS: FutureRow[] = [
   { label: 'Subscription status', note: 'Checkpoint 6' },
   { label: 'Privacy policy', note: 'Checkpoint 5' },
   { label: 'Terms and safety information', note: 'Checkpoint 5' },
+  { label: 'Listen to replies (spoken audio)', note: 'Future — off by default' },
 ];
 
 export default function SettingsScreen() {
@@ -53,7 +54,7 @@ export default function SettingsScreen() {
                 onPress={() => setStoragePreference(option.value)}
                 style={[styles.row, index > 0 && { borderTopWidth: 1, borderTopColor: theme.border }]}
               >
-                <ThemedText>{option.label}</ThemedText>
+                <ThemedText style={styles.rowLabel}>{option.label}</ThemedText>
                 <View
                   style={[
                     styles.radio,
@@ -76,8 +77,10 @@ export default function SettingsScreen() {
               key={row.label}
               style={[styles.row, index > 0 && { borderTopWidth: 1, borderTopColor: theme.border }]}
             >
-              <ThemedText themeColor="textMuted">{row.label}</ThemedText>
-              <ThemedText type="small" themeColor="textMuted">
+              <ThemedText themeColor="textMuted" style={styles.rowLabel}>
+                {row.label}
+              </ThemedText>
+              <ThemedText type="small" themeColor="textMuted" style={styles.rowNote}>
                 {row.note}
               </ThemedText>
             </View>
@@ -93,8 +96,10 @@ export default function SettingsScreen() {
               key={row.label}
               style={[styles.row, index > 0 && { borderTopWidth: 1, borderTopColor: theme.border }]}
             >
-              <ThemedText themeColor="textMuted">{row.label}</ThemedText>
-              <ThemedText type="small" themeColor="textMuted">
+              <ThemedText themeColor="textMuted" style={styles.rowLabel}>
+                {row.label}
+              </ThemedText>
+              <ThemedText type="small" themeColor="textMuted" style={styles.rowNote}>
                 {row.note}
               </ThemedText>
             </View>
@@ -127,8 +132,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: Spacing.two,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.three,
+  },
+  rowLabel: {
+    flex: 1,
+    flexShrink: 1,
+  },
+  rowNote: {
+    flexShrink: 1,
+    maxWidth: '42%',
+    textAlign: 'right',
   },
   radio: {
     width: 20,

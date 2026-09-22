@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 
 import { useTheme } from '@/hooks/use-theme';
@@ -21,9 +22,33 @@ export default function TabsLayout() {
         },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Talk' }} />
-      <Tabs.Screen name="history" options={{ title: 'History' }} />
-      <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Talk',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'mic' : 'mic-outline'} size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="history"
+        options={{
+          title: 'History',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'time' : 'time-outline'} size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'settings' : 'settings-outline'} size={size} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
