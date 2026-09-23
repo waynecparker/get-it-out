@@ -1,8 +1,8 @@
-import { mockAIResponseProvider } from '@/services/mock-ai-response-provider';
-import { mockTranscriptionProvider } from '@/services/mock-transcription-provider';
+import { supabaseAIResponseProvider } from '@/services/supabase-ai-response-provider';
+import { supabaseTranscriptionProvider } from '@/services/supabase-transcription-provider';
 
-// The single swap point for Checkpoint 4: replace these two exports with
-// Supabase Edge Function-backed implementations of the same interfaces
-// (src/types/providers.ts) and nothing else in the app needs to change.
-export const transcriptionProvider = mockTranscriptionProvider;
-export const aiResponseProvider = mockAIResponseProvider;
+// Real providers, calling the transcribe / ai-response Supabase Edge
+// Functions. Both implement the interfaces in src/types/providers.ts, so
+// swapping providers again in future only ever means changing this file.
+export const transcriptionProvider = supabaseTranscriptionProvider;
+export const aiResponseProvider = supabaseAIResponseProvider;

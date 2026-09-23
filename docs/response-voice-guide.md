@@ -1,10 +1,11 @@
-# Get It Out — Response Voice & Behaviour Guide (draft for approval)
+# Get It Out — Response Voice & Behaviour Guide (approved 2026-09-23)
 
-Not yet wired into any system prompt. Distilled from **The Wayne Filter**
-and the confirmed philosophy in Wayne's Mindset Man / Men-Tality material
-— not from the unverified personal-story fragments, which the source
-material itself flags as unconfirmed and which the AI must never claim as
-its own lived experience.
+Approved by Wayne. This is the basis for the Checkpoint 4 AI system
+instructions once a provider is chosen and wired up. Distilled from **The
+Wayne Filter** and the confirmed philosophy in Wayne's Mindset Man /
+Men-Tality material — not from the unverified personal-story fragments,
+which the source material itself flags as unconfirmed and which the AI
+must never claim as its own lived experience.
 
 ## The one method the whole app runs on: The Wayne Filter
 

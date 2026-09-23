@@ -8,7 +8,7 @@ import { Button } from '@/components/button';
 import { MicGlyph } from '@/components/mic-glyph';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { RESPONSE_MODE_LABELS } from '@/constants/mock-conversation';
+import { RESPONSE_MODE_LABELS } from '@/constants/response-modes';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useVoiceRecorder } from '@/hooks/use-voice-recorder';
@@ -98,9 +98,16 @@ export default function TalkScreen() {
       setPhase(backPhase);
       return;
     }
-    const text = await transcriptionProvider.transcribe(uri);
-    setTranscript(text);
-    setPhase('reviewing');
+    try {
+      const text = await transcriptionProvider.transcribe(uri);
+      setTranscript(text);
+      setPhase('reviewing');
+    } catch {
+      recorder.discard(uri);
+      setAudioUri(null);
+      Alert.alert('Transcription failed', "Couldn't transcribe that recording — give it another go.");
+      setPhase(backPhase);
+    }
   }
 
   function discardReview() {
@@ -123,28 +130,40 @@ export default function TalkScreen() {
     setMessages((prev) => (isFollowUp ? [...prev, userMessage] : [userMessage]));
     setAudioUri(null);
     setPhase('responded');
-    const reply = await aiResponseProvider.generateReply({
-      transcript,
-      history: isFollowUp ? history : [],
-    });
-    setMessages((prev) => [
-      ...prev,
-      { id: makeId(), role: 'assistant', content: reply.content, createdAt: new Date().toISOString() },
-    ]);
+    try {
+      const reply = await aiResponseProvider.generateReply({
+        transcript,
+        history: isFollowUp ? history : [],
+      });
+      setMessages((prev) => [
+        ...prev,
+        { id: makeId(), role: 'assistant', content: reply.content, createdAt: new Date().toISOString() },
+      ]);
+    } catch {
+      Alert.alert(
+        "Couldn't get a reply",
+        'Something went wrong reaching the AI just then. Your message is still here — try again or keep going.',
+      );
+    }
   }
 
   async function chooseMode(mode: ResponseMode) {
     setHasChosenMode(true);
-    const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
-    const reply = await aiResponseProvider.generateReply({
-      transcript: lastUserMessage?.content ?? '',
-      history: messages,
-      responseMode: mode,
-    });
-    setMessages((prev) => [
-      ...prev,
-      { id: makeId(), role: 'assistant', content: reply.content, createdAt: new Date().toISOString() },
-    ]);
+    try {
+      const reply = await aiResponseProvider.generateReply({
+        // The button tap itself is the new turn — the message it responds
+        // to is already the last entry in history, so it isn't repeated.
+        transcript: `(The user tapped "${RESPONSE_MODE_LABELS[mode]}".)`,
+        history: messages,
+        responseMode: mode,
+      });
+      setMessages((prev) => [
+        ...prev,
+        { id: makeId(), role: 'assistant', content: reply.content, createdAt: new Date().toISOString() },
+      ]);
+    } catch {
+      Alert.alert("Couldn't get a reply", 'Something went wrong reaching the AI just then. Try again.');
+    }
   }
 
   async function sendTyped() {
@@ -158,11 +177,18 @@ export default function TalkScreen() {
     };
     setMessages((prev) => [...prev, userMessage]);
     setTypedInput('');
-    const reply = await aiResponseProvider.generateReply({ transcript: text, history: messages });
-    setMessages((prev) => [
-      ...prev,
-      { id: makeId(), role: 'assistant', content: reply.content, createdAt: new Date().toISOString() },
-    ]);
+    try {
+      const reply = await aiResponseProvider.generateReply({ transcript: text, history: messages });
+      setMessages((prev) => [
+        ...prev,
+        { id: makeId(), role: 'assistant', content: reply.content, createdAt: new Date().toISOString() },
+      ]);
+    } catch {
+      Alert.alert(
+        "Couldn't get a reply",
+        'Something went wrong reaching the AI just then. Your message is still here — try again or keep going.',
+      );
+    }
   }
 
   async function saveAndReset() {
