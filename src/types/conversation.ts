@@ -10,7 +10,11 @@ export interface Message {
   responseMode?: ResponseMode;
   // Each user message can carry its own recording — a follow-up must never
   // overwrite an earlier one, so audio lives per-message, not per-conversation.
+  // audioUri: a local file:// recording not yet saved (this session only).
+  // audioStoragePath: the durable Supabase Storage path once saved — signed
+  // URLs are resolved on demand from this, never cached, since they expire.
   audioUri?: string;
+  audioStoragePath?: string;
 }
 
 export interface Conversation {

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Animated, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { AudioPlayButton } from '@/components/audio-play-button';
 import { Button } from '@/components/button';
@@ -14,6 +14,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useVoiceRecorder } from '@/hooks/use-voice-recorder';
 import { aiResponseProvider, transcriptionProvider } from '@/services/providers';
 import { useConversations } from '@/state/conversations-context';
+import { usePreferences } from '@/state/preferences-context';
 import { Conversation, Message, ResponseMode } from '@/types/conversation';
 
 type Phase = 'idle' | 'recording' | 'paused' | 'transcribing' | 'reviewing' | 'responded';
@@ -37,7 +38,9 @@ function deriveTitle(text: string) {
 export default function TalkScreen() {
   const theme = useTheme();
   const { addConversation } = useConversations();
+  const { storagePreference } = usePreferences();
   const recorder = useVoiceRecorder();
+  const [isSaving, setIsSaving] = useState(false);
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [audioUri, setAudioUri] = useState<string | null>(null);
@@ -162,7 +165,7 @@ export default function TalkScreen() {
     ]);
   }
 
-  function saveAndReset() {
+  async function saveAndReset() {
     const firstUserMessage = messages.find((m) => m.role === 'user');
     const now = new Date().toISOString();
     const conversation: Conversation = {
@@ -173,13 +176,23 @@ export default function TalkScreen() {
       isPinned: false,
       messages,
     };
-    addConversation(conversation);
+    setIsSaving(true);
+    const result = await addConversation(conversation);
+    setIsSaving(false);
     setPhase('idle');
     setAudioUri(null);
     setTranscript('');
     setMessages([]);
     setHasChosenMode(false);
-    router.push('/history');
+    if (result.audioUploadFailed) {
+      Alert.alert(
+        'Recording not saved',
+        "Your conversation was saved, but one or more recordings couldn't be uploaded. The transcript is still there.",
+      );
+    }
+    if (storagePreference !== 'delete_after_session') {
+      router.push('/history');
+    }
   }
 
   if (phase === 'reviewing' || phase === 'transcribing') {
@@ -282,8 +295,12 @@ export default function TalkScreen() {
           </Button>
         </View>
         <View style={styles.doneRow}>
-          <Button variant="ghost" onPress={saveAndReset}>
-            Done — save to History
+          <Button variant="ghost" onPress={saveAndReset} disabled={isSaving}>
+            {isSaving
+              ? 'Saving…'
+              : storagePreference === 'delete_after_session'
+                ? 'Done — nothing will be kept'
+                : 'Done — save to History'}
           </Button>
         </View>
       </Screen>

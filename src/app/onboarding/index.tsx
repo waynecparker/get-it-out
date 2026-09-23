@@ -63,7 +63,7 @@ export default function OnboardingScreen() {
   function goNext() {
     if (isLastStep) {
       completeOnboarding();
-      router.replace('/(tabs)');
+      router.replace('/auth');
       return;
     }
     setStep((s) => s + 1);

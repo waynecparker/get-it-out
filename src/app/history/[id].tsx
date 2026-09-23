@@ -26,7 +26,7 @@ export default function ConversationDetailScreen() {
   const { conversations, togglePin, deleteConversation } = useConversations();
 
   const conversation = conversations.find((c) => c.id === id);
-  const recordingCount = conversation?.messages.filter((m) => m.audioUri).length ?? 0;
+  const recordingCount = conversation?.messages.filter((m) => m.audioStoragePath).length ?? 0;
 
   if (!conversation) {
     return (
@@ -63,9 +63,9 @@ export default function ConversationDetailScreen() {
               <ThemedText style={message.role === 'user' ? styles.bubbleUserText : undefined}>
                 {message.content}
               </ThemedText>
-              {message.audioUri && (
+              {message.audioStoragePath && (
                 <View style={styles.bubbleAudio}>
-                  <AudioPlayButton uri={message.audioUri} tint="#14161A" />
+                  <AudioPlayButton storagePath={message.audioStoragePath} tint="#14161A" />
                 </View>
               )}
             </View>

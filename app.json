@@ -36,7 +36,8 @@
           "microphonePermission": "Get It Out uses your microphone to record what you say, so it can transcribe it and respond."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

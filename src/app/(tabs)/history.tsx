@@ -21,7 +21,7 @@ function formatDateTime(iso: string) {
 
 export default function HistoryScreen() {
   const theme = useTheme();
-  const { conversations, togglePin } = useConversations();
+  const { conversations, isLoading, togglePin } = useConversations();
   const [query, setQuery] = useState('');
 
   const filtered = useMemo(() => {
@@ -41,7 +41,7 @@ export default function HistoryScreen() {
 
   function renderItem({ item }: { item: Conversation }) {
     const lastMessage = item.messages[item.messages.length - 1];
-    const recordingCount = item.messages.filter((m) => m.audioUri).length;
+    const recordingCount = item.messages.filter((m) => m.audioStoragePath).length;
     return (
       <Pressable
         onPress={() => router.push(`/history/${item.id}`)}
@@ -87,7 +87,11 @@ export default function HistoryScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <ThemedText themeColor="textSecondary" style={styles.empty}>
-            {query ? 'Nothing matches that search.' : 'Nothing here yet — your sessions will show up after you talk.'}
+            {isLoading
+              ? 'Loading…'
+              : query
+                ? 'Nothing matches that search.'
+                : 'Nothing here yet — your sessions will show up after you talk.'}
           </ThemedText>
         }
       />

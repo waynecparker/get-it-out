@@ -1,9 +1,11 @@
+import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useAuth } from '@/state/auth-context';
 import { usePreferences } from '@/state/preferences-context';
 import { StoragePreference } from '@/types/conversation';
 
@@ -34,6 +36,12 @@ const APP_ROWS: FutureRow[] = [
 export default function SettingsScreen() {
   const theme = useTheme();
   const { storagePreference, setStoragePreference } = usePreferences();
+  const { session, signOut } = useAuth();
+
+  async function handleSignOut() {
+    await signOut();
+    router.replace('/auth');
+  }
 
   return (
     <Screen>
@@ -41,6 +49,23 @@ export default function SettingsScreen() {
         <ThemedText type="subtitle" style={styles.heading}>
           Settings
         </ThemedText>
+
+        <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
+          ACCOUNT
+        </ThemedText>
+        <View style={[styles.section, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+          <View style={styles.row}>
+            <ThemedText style={styles.rowLabel} numberOfLines={1}>
+              {session?.user.email}
+            </ThemedText>
+          </View>
+          <Pressable
+            onPress={handleSignOut}
+            style={[styles.row, { borderTopWidth: 1, borderTopColor: theme.border }]}
+          >
+            <ThemedText style={[styles.rowLabel, { color: theme.safety }]}>Sign out</ThemedText>
+          </Pressable>
+        </View>
 
         <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
           DEFAULT STORAGE
