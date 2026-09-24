@@ -88,7 +88,12 @@ Deno.serve(async (req) => {
     }
 
     const result = await claudeResponse.json();
-    const content = result.content?.[0]?.text ?? '';
+    // Claude can return other block types (e.g. "thinking") before the
+    // actual reply — find the text block instead of assuming it's first.
+    const textBlock = Array.isArray(result.content)
+      ? result.content.find((block: { type: string; text?: string }) => block.type === 'text')
+      : undefined;
+    const content = textBlock?.text ?? '';
 
     return new Response(JSON.stringify({ content }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

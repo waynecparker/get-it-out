@@ -16,6 +16,7 @@ import { aiResponseProvider, transcriptionProvider } from '@/services/providers'
 import { useConversations } from '@/state/conversations-context';
 import { usePreferences } from '@/state/preferences-context';
 import { Conversation, Message, ResponseMode } from '@/types/conversation';
+import { AIResponseContext } from '@/types/providers';
 
 type Phase = 'idle' | 'recording' | 'paused' | 'transcribing' | 'reviewing' | 'responded';
 
@@ -47,7 +48,8 @@ export default function TalkScreen() {
   const [transcript, setTranscript] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [typedInput, setTypedInput] = useState('');
-  const [hasChosenMode, setHasChosenMode] = useState(false);
+  const [chosenMode, setChosenMode] = useState<ResponseMode | null>(null);
+  const [pendingReplyContext, setPendingReplyContext] = useState<AIResponseContext | null>(null);
 
   const [pulse] = useState(() => new Animated.Value(1));
 
@@ -117,6 +119,27 @@ export default function TalkScreen() {
     setPhase(backPhase);
   }
 
+  // Shared by every path that asks for a reply. The provider already
+  // retries once internally on an empty response; if it still fails, the
+  // user's message stays exactly where it is and a tappable retry shows
+  // in its place — never an empty or missing assistant bubble.
+  async function requestReply(context: AIResponseContext) {
+    setPendingReplyContext(null);
+    try {
+      const reply = await aiResponseProvider.generateReply(context);
+      setMessages((prev) => [
+        ...prev,
+        { id: makeId(), role: 'assistant', content: reply.content, createdAt: new Date().toISOString() },
+      ]);
+    } catch {
+      setPendingReplyContext(context);
+    }
+  }
+
+  function retryReply() {
+    if (pendingReplyContext) requestReply(pendingReplyContext);
+  }
+
   async function submitTranscript() {
     const isFollowUp = messages.length > 0;
     const userMessage: Message = {
@@ -130,40 +153,24 @@ export default function TalkScreen() {
     setMessages((prev) => (isFollowUp ? [...prev, userMessage] : [userMessage]));
     setAudioUri(null);
     setPhase('responded');
-    try {
-      const reply = await aiResponseProvider.generateReply({
-        transcript,
-        history: isFollowUp ? history : [],
-      });
-      setMessages((prev) => [
-        ...prev,
-        { id: makeId(), role: 'assistant', content: reply.content, createdAt: new Date().toISOString() },
-      ]);
-    } catch {
-      Alert.alert(
-        "Couldn't get a reply",
-        'Something went wrong reaching the AI just then. Your message is still here — try again or keep going.',
-      );
-    }
+    await requestReply({
+      transcript,
+      history: isFollowUp ? history : [],
+      // Once a mode is chosen, every further "Keep talking" round stays
+      // in that mode too — not just the reply right after the tap.
+      responseMode: isFollowUp ? (chosenMode ?? undefined) : undefined,
+    });
   }
 
   async function chooseMode(mode: ResponseMode) {
-    setHasChosenMode(true);
-    try {
-      const reply = await aiResponseProvider.generateReply({
-        // The button tap itself is the new turn — the message it responds
-        // to is already the last entry in history, so it isn't repeated.
-        transcript: `(The user tapped "${RESPONSE_MODE_LABELS[mode]}".)`,
-        history: messages,
-        responseMode: mode,
-      });
-      setMessages((prev) => [
-        ...prev,
-        { id: makeId(), role: 'assistant', content: reply.content, createdAt: new Date().toISOString() },
-      ]);
-    } catch {
-      Alert.alert("Couldn't get a reply", 'Something went wrong reaching the AI just then. Try again.');
-    }
+    setChosenMode(mode);
+    await requestReply({
+      // The button tap itself is the new turn — the message it responds
+      // to is already the last entry in history, so it isn't repeated.
+      transcript: `(The user tapped "${RESPONSE_MODE_LABELS[mode]}".)`,
+      history: messages,
+      responseMode: mode,
+    });
   }
 
   async function sendTyped() {
@@ -177,18 +184,7 @@ export default function TalkScreen() {
     };
     setMessages((prev) => [...prev, userMessage]);
     setTypedInput('');
-    try {
-      const reply = await aiResponseProvider.generateReply({ transcript: text, history: messages });
-      setMessages((prev) => [
-        ...prev,
-        { id: makeId(), role: 'assistant', content: reply.content, createdAt: new Date().toISOString() },
-      ]);
-    } catch {
-      Alert.alert(
-        "Couldn't get a reply",
-        'Something went wrong reaching the AI just then. Your message is still here — try again or keep going.',
-      );
-    }
+    await requestReply({ transcript: text, history: messages });
   }
 
   async function saveAndReset() {
@@ -209,7 +205,8 @@ export default function TalkScreen() {
     setAudioUri(null);
     setTranscript('');
     setMessages([]);
-    setHasChosenMode(false);
+    setChosenMode(null);
+    setPendingReplyContext(null);
     if (result.audioUploadFailed) {
       Alert.alert(
         'Recording not saved',
@@ -264,7 +261,8 @@ export default function TalkScreen() {
 
   if (phase === 'responded') {
     const lastMessage = messages[messages.length - 1];
-    const showChoices = lastMessage?.role === 'assistant' && !hasChosenMode;
+    const showChoices = lastMessage?.role === 'assistant' && chosenMode === null;
+    const isVentMode = chosenMode === 'vent';
 
     return (
       <Screen noPadding>
@@ -290,6 +288,15 @@ export default function TalkScreen() {
             </View>
           ))}
 
+          {pendingReplyContext && (
+            <Pressable
+              onPress={retryReply}
+              style={[styles.bubble, styles.bubbleAssistant, { backgroundColor: theme.backgroundElement }]}
+            >
+              <ThemedText style={{ color: theme.safety }}>⚠ Couldn&apos;t get a reply — Try response again</ThemedText>
+            </Pressable>
+          )}
+
           {showChoices && (
             <View style={styles.choices}>
               {(Object.keys(RESPONSE_MODE_LABELS) as ResponseMode[]).map((mode) => (
@@ -301,34 +308,51 @@ export default function TalkScreen() {
           )}
         </ScrollView>
 
-        <View style={[styles.composer, { borderTopColor: theme.border }]}>
-          <TextInput
-            value={typedInput}
-            onChangeText={setTypedInput}
-            placeholder="Or type instead…"
-            placeholderTextColor={theme.textMuted}
-            style={[styles.composerInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-            onSubmitEditing={sendTyped}
-          />
-          <Pressable
-            onPress={startRecording}
-            style={[styles.composerMicButton, { backgroundColor: theme.accent }]}
-          >
-            <Ionicons name="mic" size={20} color="#14161A" />
-          </Pressable>
-          <Button onPress={sendTyped} style={styles.sendButton}>
-            Send
-          </Button>
-        </View>
-        <View style={styles.doneRow}>
-          <Button variant="ghost" onPress={saveAndReset} disabled={isSaving}>
-            {isSaving
-              ? 'Saving…'
-              : storagePreference === 'delete_after_session'
-                ? 'Done — nothing will be kept'
-                : 'Done — save to History'}
-          </Button>
-        </View>
+        {isVentMode ? (
+          <View style={[styles.ventActions, { borderTopColor: theme.border }]}>
+            <Button variant="secondary" onPress={saveAndReset} style={styles.flexButton} disabled={isSaving}>
+              {isSaving
+                ? 'Saving…'
+                : storagePreference === 'delete_after_session'
+                  ? 'Save (nothing will be kept)'
+                  : 'Save to history'}
+            </Button>
+            <Button onPress={startRecording} style={styles.flexButton} disabled={isSaving}>
+              Keep talking
+            </Button>
+          </View>
+        ) : (
+          <>
+            <View style={[styles.composer, { borderTopColor: theme.border }]}>
+              <TextInput
+                value={typedInput}
+                onChangeText={setTypedInput}
+                placeholder="Or type instead…"
+                placeholderTextColor={theme.textMuted}
+                style={[styles.composerInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                onSubmitEditing={sendTyped}
+              />
+              <Pressable
+                onPress={startRecording}
+                style={[styles.composerMicButton, { backgroundColor: theme.accent }]}
+              >
+                <Ionicons name="mic" size={20} color="#14161A" />
+              </Pressable>
+              <Button onPress={sendTyped} style={styles.sendButton}>
+                Send
+              </Button>
+            </View>
+            <View style={styles.doneRow}>
+              <Button variant="ghost" onPress={saveAndReset} disabled={isSaving}>
+                {isSaving
+                  ? 'Saving…'
+                  : storagePreference === 'delete_after_session'
+                    ? 'Done — nothing will be kept'
+                    : 'Done — save to History'}
+              </Button>
+            </View>
+          </>
+        )}
       </Screen>
     );
   }
@@ -477,6 +501,14 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.three,
+    borderTopWidth: 1,
+  },
+  ventActions: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.two,
     borderTopWidth: 1,
   },
   composerInput: {
