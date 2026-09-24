@@ -2,10 +2,13 @@ import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
+import { AppLockScreen } from '@/components/app-lock-screen';
 import { Colors } from '@/constants/theme';
+import { AppLockProvider, useAppLock } from '@/state/app-lock-context';
 import { AuthProvider } from '@/state/auth-context';
 import { ConversationsProvider } from '@/state/conversations-context';
 import { PreferencesProvider } from '@/state/preferences-context';
+import { cleanupAbandonedTempRecordings } from '@/state/startup-cleanup';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -21,9 +24,43 @@ const NavigationTheme = {
   },
 };
 
+function AppNavigator() {
+  const { isLocked } = useAppLock();
+
+  if (isLocked) {
+    return <AppLockScreen />;
+  }
+
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="onboarding/index" />
+      <Stack.Screen name="auth/index" />
+      <Stack.Screen name="reset-password" />
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen
+        name="history/[id]"
+        options={{
+          headerShown: true,
+          headerTitle: 'Conversation',
+          headerBackTitle: 'History',
+        }}
+      />
+      <Stack.Screen
+        name="privacy"
+        options={{
+          headerShown: true,
+          headerTitle: 'Privacy',
+          headerBackTitle: 'Settings',
+        }}
+      />
+    </Stack>
+  );
+}
+
 export default function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync();
+    cleanupAbandonedTempRecordings();
   }, []);
 
   return (
@@ -31,20 +68,9 @@ export default function RootLayout() {
       <AuthProvider>
         <PreferencesProvider>
           <ConversationsProvider>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="onboarding/index" />
-              <Stack.Screen name="auth/index" />
-              <Stack.Screen name="reset-password" />
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen
-                name="history/[id]"
-                options={{
-                  headerShown: true,
-                  headerTitle: 'Conversation',
-                  headerBackTitle: 'History',
-                }}
-              />
-            </Stack>
+            <AppLockProvider>
+              <AppNavigator />
+            </AppLockProvider>
           </ConversationsProvider>
         </PreferencesProvider>
       </AuthProvider>

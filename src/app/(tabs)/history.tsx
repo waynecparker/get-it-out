@@ -21,7 +21,7 @@ function formatDateTime(iso: string) {
 
 export default function HistoryScreen() {
   const theme = useTheme();
-  const { conversations, isLoading, togglePin } = useConversations();
+  const { conversations, isLoading, togglePin, undoDelete, pendingDeletionTitle } = useConversations();
   const [query, setQuery] = useState('');
 
   const filtered = useMemo(() => {
@@ -95,6 +95,18 @@ export default function HistoryScreen() {
           </ThemedText>
         }
       />
+      {pendingDeletionTitle && (
+        <View style={[styles.undoBanner, { backgroundColor: theme.backgroundElevated, borderColor: theme.border }]}>
+          <ThemedText type="small" style={styles.undoText} numberOfLines={1}>
+            Deleted &quot;{pendingDeletionTitle}&quot;
+          </ThemedText>
+          <Pressable onPress={undoDelete} hitSlop={8}>
+            <ThemedText type="smallBold" themeColor="accent">
+              Undo
+            </ThemedText>
+          </Pressable>
+        </View>
+      )}
     </Screen>
   );
 }
@@ -136,5 +148,22 @@ const styles = StyleSheet.create({
   empty: {
     textAlign: 'center',
     marginTop: Spacing.six,
+  },
+  undoBanner: {
+    position: 'absolute',
+    left: Spacing.four,
+    right: Spacing.four,
+    bottom: Spacing.four,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+    borderRadius: Spacing.three,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.three,
+  },
+  undoText: {
+    flex: 1,
   },
 });

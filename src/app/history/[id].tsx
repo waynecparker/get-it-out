@@ -1,8 +1,9 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AudioPlayButton } from '@/components/audio-play-button';
 import { Button } from '@/components/button';
+import { SafetyPanel } from '@/components/safety-panel';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -23,7 +24,7 @@ export default function ConversationDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
   const router = useRouter();
-  const { conversations, togglePin, deleteConversation } = useConversations();
+  const { conversations, togglePin, requestDelete } = useConversations();
 
   const conversation = conversations.find((c) => c.id === id);
   const recordingCount = conversation?.messages.filter((m) => m.audioStoragePath).length ?? 0;
@@ -51,21 +52,27 @@ export default function ConversationDetailScreen() {
 
         <View style={styles.messages}>
           {conversation.messages.map((message) => (
-            <View
-              key={message.id}
-              style={[
-                styles.bubble,
-                message.role === 'user'
-                  ? [styles.bubbleUser, { backgroundColor: theme.accent }]
-                  : [styles.bubbleAssistant, { backgroundColor: theme.backgroundElement }],
-              ]}
-            >
-              <ThemedText style={message.role === 'user' ? styles.bubbleUserText : undefined}>
-                {message.content}
-              </ThemedText>
-              {message.audioStoragePath && (
-                <View style={styles.bubbleAudio}>
-                  <AudioPlayButton storagePath={message.audioStoragePath} tint="#14161A" />
+            <View key={message.id}>
+              <View
+                style={[
+                  styles.bubble,
+                  message.role === 'user'
+                    ? [styles.bubbleUser, { backgroundColor: theme.accent }]
+                    : [styles.bubbleAssistant, { backgroundColor: theme.backgroundElement }],
+                ]}
+              >
+                <ThemedText style={message.role === 'user' ? styles.bubbleUserText : undefined}>
+                  {message.content}
+                </ThemedText>
+                {message.audioStoragePath && (
+                  <View style={styles.bubbleAudio}>
+                    <AudioPlayButton storagePath={message.audioStoragePath} tint="#14161A" />
+                  </View>
+                )}
+              </View>
+              {message.triggeredSafetyPanel && (
+                <View style={styles.safetyPanelWrap}>
+                  <SafetyPanel />
                 </View>
               )}
             </View>
@@ -79,8 +86,21 @@ export default function ConversationDetailScreen() {
           <Button
             variant="secondary"
             onPress={() => {
-              deleteConversation(conversation.id);
-              router.back();
+              Alert.alert(
+                'Delete this conversation?',
+                'The recording, transcript and replies will all be deleted.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => {
+                      requestDelete(conversation.id);
+                      router.back();
+                    },
+                  },
+                ],
+              );
             }}
             style={styles.flexButton}
           >
@@ -103,6 +123,9 @@ const styles = StyleSheet.create({
   },
   bubbleAudio: {
     marginTop: Spacing.two,
+  },
+  safetyPanelWrap: {
+    marginTop: Spacing.three,
   },
   messages: {
     gap: Spacing.three,

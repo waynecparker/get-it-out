@@ -20,16 +20,9 @@ interface FutureRow {
   note: string;
 }
 
-const ACCOUNT_ROWS: FutureRow[] = [
-  { label: 'Export my data', note: 'Checkpoint 5' },
-  { label: 'Delete individual conversations', note: 'Checkpoint 5' },
-  { label: 'Delete my account and all data', note: 'Checkpoint 5' },
-];
-
 const APP_ROWS: FutureRow[] = [
   { label: 'Subscription status', note: 'Checkpoint 6' },
-  { label: 'Privacy policy', note: 'Checkpoint 5' },
-  { label: 'Terms and safety information', note: 'Checkpoint 5' },
+  { label: 'Export my data', note: 'Future' },
   { label: 'Listen to replies (spoken audio)', note: 'Future — off by default' },
 ];
 
@@ -94,22 +87,15 @@ export default function SettingsScreen() {
         </View>
 
         <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
-          YOUR DATA
+          PRIVACY
         </ThemedText>
         <View style={[styles.section, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-          {ACCOUNT_ROWS.map((row, index) => (
-            <View
-              key={row.label}
-              style={[styles.row, index > 0 && { borderTopWidth: 1, borderTopColor: theme.border }]}
-            >
-              <ThemedText themeColor="textMuted" style={styles.rowLabel}>
-                {row.label}
-              </ThemedText>
-              <ThemedText type="small" themeColor="textMuted" style={styles.rowNote}>
-                {row.note}
-              </ThemedText>
-            </View>
-          ))}
+          <Pressable onPress={() => router.push('/privacy')} style={styles.row}>
+            <ThemedText style={styles.rowLabel}>Privacy</ThemedText>
+            <ThemedText type="small" themeColor="textMuted" style={styles.rowNote}>
+              History, account and app lock
+            </ThemedText>
+          </Pressable>
         </View>
 
         <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>

@@ -7,11 +7,24 @@ export interface TranscriptionProvider {
 export interface AIResponseContext {
   transcript: string;
   history: Message[];
-  responseMode?: ResponseMode;
+  // 'stepdown' is a request-time-only tone hint for the post-crisis
+  // handover flow — never persisted on a Message (that stays ResponseMode).
+  responseMode?: ResponseMode | 'stepdown';
+  /** True once this conversation has previously reached "immediate" risk and hasn't been resolved yet. */
+  crisisModeActive?: boolean;
 }
+
+export type SafetyRiskLevel = 'none' | 'concerning' | 'immediate';
+export type SafetyRiskType = 'self_harm' | 'harm_to_others' | 'medical' | 'intoxication_risk';
 
 export interface AIReply {
   content: string;
+  riskLevel: SafetyRiskLevel;
+  riskType?: SafetyRiskType;
+  /** Only meaningful when the request was sent with crisisModeActive: true. */
+  crisisResolved?: boolean;
+  /** True when this reply itself asks the means-check yes/no question. */
+  awaitingMeansCheck?: boolean;
 }
 
 export interface AIResponseProvider {

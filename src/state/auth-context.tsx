@@ -3,6 +3,7 @@ import * as Linking from 'expo-linking';
 import { createContext, PropsWithChildren, use, useEffect, useMemo, useState } from 'react';
 
 import { supabase } from '@/lib/supabase';
+import { runActiveConversationCleanup } from '@/state/active-conversation-cleanup';
 
 interface AuthResult {
   error: string | null;
@@ -16,6 +17,7 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<AuthResult>;
+  deleteAccount: () => Promise<AuthResult>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -60,7 +62,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return { error: error?.message ?? null };
       },
       async signOut() {
+        runActiveConversationCleanup();
         await supabase.auth.signOut();
+      },
+      async deleteAccount() {
+        const { error } = await supabase.functions.invoke('delete-account');
+        if (error) return { error: error.message };
+        runActiveConversationCleanup();
+        // The account is already gone server-side — this just clears the
+        // now-invalid local session.
+        await supabase.auth.signOut();
+        return { error: null };
       },
       async resetPassword(email) {
         // Linking.createURL resolves to the right thing in both

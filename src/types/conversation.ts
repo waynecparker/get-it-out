@@ -15,6 +15,9 @@ export interface Message {
   // URLs are resolved on demand from this, never cached, since they expire.
   audioUri?: string;
   audioStoragePath?: string;
+  // Whether this assistant message triggered the safety-support panel —
+  // stored so a saved, reopened conversation re-renders it correctly.
+  triggeredSafetyPanel?: boolean;
 }
 
 export interface Conversation {

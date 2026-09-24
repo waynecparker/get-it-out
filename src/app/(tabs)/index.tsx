@@ -6,6 +6,7 @@ import { Alert, Animated, Pressable, ScrollView, StyleSheet, TextInput, View } f
 import { AudioPlayButton } from '@/components/audio-play-button';
 import { Button } from '@/components/button';
 import { MicGlyph } from '@/components/mic-glyph';
+import { SafetyPanel } from '@/components/safety-panel';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { RESPONSE_MODE_LABELS } from '@/constants/response-modes';
@@ -13,6 +14,7 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useVoiceRecorder } from '@/hooks/use-voice-recorder';
 import { aiResponseProvider, transcriptionProvider } from '@/services/providers';
+import { registerActiveConversationCleanup } from '@/state/active-conversation-cleanup';
 import { useConversations } from '@/state/conversations-context';
 import { usePreferences } from '@/state/preferences-context';
 import { Conversation, Message, ResponseMode } from '@/types/conversation';
@@ -50,8 +52,36 @@ export default function TalkScreen() {
   const [typedInput, setTypedInput] = useState('');
   const [chosenMode, setChosenMode] = useState<ResponseMode | null>(null);
   const [pendingReplyContext, setPendingReplyContext] = useState<AIResponseContext | null>(null);
+  // True once this conversation has hit "immediate" risk and hasn't yet
+  // had a clear resolution from the model (see requestReply below).
+  const [isCrisisMode, setIsCrisisMode] = useState(false);
+  // True only for the turn where the model's reply itself asks the
+  // means-check yes/no question — swaps the crisis quick actions.
+  const [awaitingMeansCheck, setAwaitingMeansCheck] = useState(false);
+  // Guards every requestReply call against a fast double-tap on a choice
+  // button firing two overlapping requests and appending two replies.
+  const [isRequestingReply, setIsRequestingReply] = useState(false);
+  // The post-crisis step-down flow: null outside it, 'handover' for the
+  // with-someone/calling-someone/stay-longer choice, 'stepdown' for the
+  // ongoing supportive conversation after that, 'closing' for the final
+  // deliberate save/discard choice. Resets to null if crisis reactivates.
+  const [crisisStage, setCrisisStage] = useState<'handover' | 'stepdown' | 'closing' | null>(null);
 
   const [pulse] = useState(() => new Animated.Value(1));
+
+  // Registers a cleanup for this in-progress, unsaved conversation so
+  // sign-out (from the Settings tab, which has no access to this local
+  // state otherwise) can still discard local temp audio before it signs
+  // out — nothing orphaned just because the user left via a different tab.
+  useEffect(() => {
+    registerActiveConversationCleanup(() => {
+      messages.forEach((m) => {
+        if (m.audioUri) recorder.discard(m.audioUri);
+      });
+      if (audioUri) recorder.discard(audioUri);
+    });
+    return () => registerActiveConversationCleanup(null);
+  }, [messages, audioUri, recorder]);
 
   useEffect(() => {
     if (phase !== 'recording') {
@@ -124,20 +154,68 @@ export default function TalkScreen() {
   // user's message stays exactly where it is and a tappable retry shows
   // in its place — never an empty or missing assistant bubble.
   async function requestReply(context: AIResponseContext) {
+    if (isRequestingReply) return;
+    setIsRequestingReply(true);
     setPendingReplyContext(null);
+    const requestContext: AIResponseContext = { ...context, crisisModeActive: isCrisisMode };
     try {
-      const reply = await aiResponseProvider.generateReply(context);
+      const reply = await aiResponseProvider.generateReply(requestContext);
+      if (reply.riskLevel === 'immediate') {
+        setIsCrisisMode(true);
+        setCrisisStage(null);
+      } else if (isCrisisMode && reply.crisisResolved) {
+        setIsCrisisMode(false);
+        setCrisisStage('handover');
+      }
+      setAwaitingMeansCheck(reply.awaitingMeansCheck === true);
       setMessages((prev) => [
         ...prev,
-        { id: makeId(), role: 'assistant', content: reply.content, createdAt: new Date().toISOString() },
+        {
+          id: makeId(),
+          role: 'assistant',
+          content: reply.content,
+          createdAt: new Date().toISOString(),
+          triggeredSafetyPanel: reply.riskLevel === 'immediate',
+        },
       ]);
     } catch {
-      setPendingReplyContext(context);
+      setPendingReplyContext(requestContext);
+    } finally {
+      setIsRequestingReply(false);
     }
   }
 
   function retryReply() {
     if (pendingReplyContext) requestReply(pendingReplyContext);
+  }
+
+  function discardConversation() {
+    Alert.alert(
+      'Discard this conversation?',
+      "It won't be saved — the recording, transcript and replies will all be deleted.",
+      [
+        { text: 'Keep going', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: () => {
+            messages.forEach((m) => {
+              if (m.audioUri) recorder.discard(m.audioUri);
+            });
+            recorder.discard(audioUri);
+            setPhase('idle');
+            setAudioUri(null);
+            setTranscript('');
+            setMessages([]);
+            setChosenMode(null);
+            setPendingReplyContext(null);
+            setIsCrisisMode(false);
+            setAwaitingMeansCheck(false);
+            setCrisisStage(null);
+          },
+        },
+      ],
+    );
   }
 
   async function submitTranscript() {
@@ -157,8 +235,9 @@ export default function TalkScreen() {
       transcript,
       history: isFollowUp ? history : [],
       // Once a mode is chosen, every further "Keep talking" round stays
-      // in that mode too — not just the reply right after the tap.
-      responseMode: isFollowUp ? (chosenMode ?? undefined) : undefined,
+      // in that mode too — not just the reply right after the tap. The
+      // step-down stage overrides whatever mode was chosen earlier.
+      responseMode: isFollowUp ? (crisisStage === 'stepdown' ? 'stepdown' : (chosenMode ?? undefined)) : undefined,
     });
   }
 
@@ -171,6 +250,54 @@ export default function TalkScreen() {
       history: messages,
       responseMode: mode,
     });
+  }
+
+  // Crisis-mode quick actions, shown instead of the normal vent/unpack/
+  // action choices whenever isCrisisMode is true — regardless of chosenMode,
+  // so they replace the ordinary choices the instant crisis mode starts.
+  // None of these set chosenMode; the ordinary choices reappear on their
+  // own once the crisis resolves (see requestReply).
+  async function acknowledgeSafety() {
+    await requestReply({
+      transcript: '(The user tapped "I\'m safe now".)',
+      history: messages,
+    });
+    // A deliberate tap on "I'm safe now" is itself the clear safety
+    // confirmation — treat it as authoritative rather than waiting on the
+    // model's own crisis_resolved judgement, so the next turn is always
+    // back to normal once he's told us directly. That leads into a short
+    // step-down, not straight back to the ordinary choices.
+    setIsCrisisMode(false);
+    setAwaitingMeansCheck(false);
+    setCrisisStage('handover');
+  }
+
+  async function answerMeansCheck(hasTakenSome: boolean) {
+    await requestReply({
+      transcript: hasTakenSome
+        ? '(The user tapped "I\'ve taken some".)'
+        : '(The user tapped "I haven\'t taken them".)',
+      history: messages,
+    });
+  }
+
+  // Post-crisis step-down. None of these set chosenMode — 'stepdown' is a
+  // request-time-only tone hint (see submitTranscript), never a persisted
+  // ResponseMode, so it can't collide with the vent/unpack/action enum.
+  async function completeHandover(label: string) {
+    await requestReply({
+      transcript: `(The user tapped "${label}".)`,
+      history: messages,
+      responseMode: 'stepdown',
+    });
+    setCrisisStage('stepdown');
+  }
+
+  // Used for both "I'm safe — end chat" (from the handover stage) and
+  // "I'm done for now" (from the ongoing step-down stage) — neither asks
+  // the AI anything further, straight to the deliberate save/discard choice.
+  function finishStepDown() {
+    setCrisisStage('closing');
   }
 
   async function sendTyped() {
@@ -207,6 +334,9 @@ export default function TalkScreen() {
     setMessages([]);
     setChosenMode(null);
     setPendingReplyContext(null);
+    setIsCrisisMode(false);
+    setAwaitingMeansCheck(false);
+    setCrisisStage(null);
     if (result.audioUploadFailed) {
       Alert.alert(
         'Recording not saved',
@@ -261,30 +391,40 @@ export default function TalkScreen() {
 
   if (phase === 'responded') {
     const lastMessage = messages[messages.length - 1];
-    const showChoices = lastMessage?.role === 'assistant' && chosenMode === null;
+    const lastMessageIsAssistant = lastMessage?.role === 'assistant';
+    // Crisis quick actions take priority over the ordinary mode choices
+    // unconditionally — the instant isCrisisMode is true, regardless of
+    // whether a mode was already picked earlier in this conversation.
+    const showCrisisChoices = lastMessageIsAssistant && isCrisisMode;
+    const showHandoverChoices = !isCrisisMode && crisisStage === 'handover';
+    const showStepDownChoices = lastMessageIsAssistant && !isCrisisMode && crisisStage === 'stepdown';
+    const showClosingChoices = !isCrisisMode && crisisStage === 'closing';
+    const showChoices = lastMessageIsAssistant && chosenMode === null && !isCrisisMode && crisisStage === null;
     const isVentMode = chosenMode === 'vent';
+    const inStepDownFlow = crisisStage !== null;
 
     return (
       <Screen noPadding>
         <ScrollView contentContainerStyle={styles.chatContent}>
           {messages.map((message) => (
-            <View
-              key={message.id}
-              style={[
-                styles.bubble,
-                message.role === 'user'
-                  ? [styles.bubbleUser, { backgroundColor: theme.accent }]
-                  : [styles.bubbleAssistant, { backgroundColor: theme.backgroundElement }],
-              ]}
-            >
-              <ThemedText style={message.role === 'user' ? styles.bubbleUserText : undefined}>
-                {message.content}
-              </ThemedText>
-              {message.audioUri && (
-                <View style={styles.bubbleAudio}>
-                  <AudioPlayButton uri={message.audioUri} tint="#14161A" />
-                </View>
-              )}
+            <View key={message.id}>
+              <View
+                style={[
+                  styles.bubble,
+                  message.role === 'user'
+                    ? [styles.bubbleUser, { backgroundColor: theme.accent }]
+                    : [styles.bubbleAssistant, { backgroundColor: theme.backgroundElement }],
+                ]}
+              >
+                <ThemedText style={message.role === 'user' ? styles.bubbleUserText : undefined}>
+                  {message.content}
+                </ThemedText>
+                {message.audioUri && (
+                  <View style={styles.bubbleAudio}>
+                    <AudioPlayButton uri={message.audioUri} tint="#14161A" />
+                  </View>
+                )}
+              </View>
             </View>
           ))}
 
@@ -297,18 +437,101 @@ export default function TalkScreen() {
             </Pressable>
           )}
 
+          {showCrisisChoices && awaitingMeansCheck && (
+            <View style={styles.choices}>
+              <Button variant="secondary" onPress={() => answerMeansCheck(false)} disabled={isRequestingReply}>
+                I haven&apos;t taken them
+              </Button>
+              <Button variant="secondary" onPress={() => answerMeansCheck(true)} disabled={isRequestingReply}>
+                I&apos;ve taken some
+              </Button>
+            </View>
+          )}
+          {showCrisisChoices && !awaitingMeansCheck && (
+            <View style={styles.choices}>
+              <Button variant="secondary" onPress={startRecording} disabled={isRequestingReply}>
+                Keep talking
+              </Button>
+              <Button variant="secondary" onPress={acknowledgeSafety} disabled={isRequestingReply}>
+                I&apos;m safe now
+              </Button>
+            </View>
+          )}
           {showChoices && (
             <View style={styles.choices}>
               {(Object.keys(RESPONSE_MODE_LABELS) as ResponseMode[]).map((mode) => (
-                <Button key={mode} variant="secondary" onPress={() => chooseMode(mode)}>
+                <Button
+                  key={mode}
+                  variant="secondary"
+                  onPress={() => chooseMode(mode)}
+                  disabled={isRequestingReply}
+                >
                   {RESPONSE_MODE_LABELS[mode]}
                 </Button>
               ))}
             </View>
           )}
+
+          {/* Post-crisis step-down: a short, deliberate handover instead of
+              dropping straight back into the ordinary choices. */}
+          {showHandoverChoices && (
+            <View style={styles.choices}>
+              <Button
+                variant="secondary"
+                onPress={() => completeHandover("I'm with someone now")}
+                disabled={isRequestingReply}
+              >
+                I&apos;m with someone now
+              </Button>
+              <Button
+                variant="secondary"
+                onPress={() => completeHandover("I'm calling someone now")}
+                disabled={isRequestingReply}
+              >
+                I&apos;m calling someone now
+              </Button>
+              <Button variant="secondary" onPress={finishStepDown} disabled={isRequestingReply}>
+                I&apos;m safe — end chat
+              </Button>
+            </View>
+          )}
+          {showStepDownChoices && (
+            <View style={styles.choices}>
+              <Button variant="secondary" onPress={startRecording} disabled={isRequestingReply}>
+                Keep talking
+              </Button>
+              <Button variant="secondary" onPress={finishStepDown} disabled={isRequestingReply}>
+                I&apos;m done for now
+              </Button>
+            </View>
+          )}
+          {showClosingChoices && (
+            <View style={styles.choices}>
+              <Button variant="secondary" onPress={saveAndReset} disabled={isSaving}>
+                {isSaving
+                  ? 'Saving…'
+                  : storagePreference === 'delete_after_session'
+                    ? 'Save (nothing will be kept)'
+                    : 'Save to history'}
+              </Button>
+              <Button variant="secondary" onPress={discardConversation} disabled={isSaving}>
+                Discard conversation
+              </Button>
+            </View>
+          )}
+
+          {/* Exactly one panel for the whole live crisis stretch — not one
+              per triggering message, which showed as visible duplicates
+              once more than one turn in a row came back "immediate". Shown
+              below the crisis choices so the actions read first. */}
+          {isCrisisMode && (
+            <View style={styles.safetyPanelWrap}>
+              <SafetyPanel />
+            </View>
+          )}
         </ScrollView>
 
-        {isVentMode ? (
+        {inStepDownFlow ? null : isVentMode ? (
           <View style={[styles.ventActions, { borderTopColor: theme.border }]}>
             <Button variant="secondary" onPress={saveAndReset} style={styles.flexButton} disabled={isSaving}>
               {isSaving
@@ -319,6 +542,13 @@ export default function TalkScreen() {
             </Button>
             <Button onPress={startRecording} style={styles.flexButton} disabled={isSaving}>
               Keep talking
+            </Button>
+          </View>
+        ) : null}
+        {inStepDownFlow ? null : isVentMode ? (
+          <View style={styles.discardRow}>
+            <Button variant="ghost" onPress={discardConversation} disabled={isSaving}>
+              Discard conversation
             </Button>
           </View>
         ) : (
@@ -349,6 +579,9 @@ export default function TalkScreen() {
                   : storagePreference === 'delete_after_session'
                     ? 'Done — nothing will be kept'
                     : 'Done — save to History'}
+              </Button>
+              <Button variant="ghost" onPress={discardConversation} disabled={isSaving}>
+                Discard conversation
               </Button>
             </View>
           </>
@@ -492,6 +725,9 @@ const styles = StyleSheet.create({
   bubbleAudio: {
     marginTop: Spacing.two,
   },
+  safetyPanelWrap: {
+    marginTop: Spacing.three,
+  },
   choices: {
     gap: Spacing.two,
     marginTop: Spacing.two,
@@ -531,5 +767,9 @@ const styles = StyleSheet.create({
   doneRow: {
     alignItems: 'center',
     paddingVertical: Spacing.two,
+  },
+  discardRow: {
+    alignItems: 'center',
+    paddingBottom: Spacing.two,
   },
 });
