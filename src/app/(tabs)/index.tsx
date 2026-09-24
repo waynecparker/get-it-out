@@ -250,7 +250,7 @@ export default function TalkScreen() {
                 Discard
               </Button>
               <Button onPress={submitTranscript} style={styles.flexButton}>
-                Looks good
+                Yep, that&apos;s it
               </Button>
             </View>
           </>
