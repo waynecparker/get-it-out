@@ -70,16 +70,14 @@ been applied to onboarding, store listings, or any screen yet.
 
 ## Pending decisions before implementation
 
-These are still open, in this order, before a single Checkpoint 5.5 brief
-is approved:
-
-1. Verify "Get It Out" availability (name/trademark/domain/store listing).
-2. Final colours and visual direction (current palette in
-   `src/constants/theme.ts` is an explicitly-labelled placeholder).
-3. Icon and splash concept (current assets in `assets/images/` are still
-   the default Expo-scaffold placeholders from Checkpoint 1).
+1. Verify "Get It Out" availability (name/trademark/domain/store listing) — **still open.**
+2. ~~Final colours and visual direction~~ — **resolved**, see
+   `docs/visual-identity.md`.
+3. ~~Icon and splash concept~~ — **resolved**, see `docs/visual-identity.md`
+   (six decisions: colour palette, icon treatment, splash composition,
+   light/dark handling, attribution placement, asset sizes/formats).
 4. Review the four onboarding screens
-   (`src/app/onboarding/index.tsx`) against this brand foundation.
+   (`src/app/onboarding/index.tsx`) against this brand foundation — **still open.**
 
 Once all four are settled, Wayne will give one approved Checkpoint 5.5
 brief covering the actual code/asset changes.
