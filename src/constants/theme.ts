@@ -7,11 +7,13 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
-// Placeholder brand palette — swap for the real Men-Tality / Mindset Man
-// brand colours once they're supplied. The app forces dark mode
-// (userInterfaceStyle: "dark" in app.json) since the design direction is a
-// single deliberate charcoal/navy look, not a light/dark adaptive one; the
-// light tokens are kept for completeness (web, future toggle).
+// Approved "Midnight Copper" brand palette — see docs/visual-identity.md
+// (Decision 1) for the full rationale and computed WCAG contrast ratios.
+// The app forces dark mode (userInterfaceStyle: "dark" in app.json) since
+// the design direction is a single deliberate charcoal/navy look, not a
+// light/dark adaptive one; the light tokens are an untouched placeholder,
+// kept only for completeness (web, future toggle) — no light palette has
+// been approved.
 export const Colors = {
   light: {
     text: '#14161A',
@@ -27,17 +29,17 @@ export const Colors = {
     safety: '#B03D34',
   },
   dark: {
-    text: '#F3F4F6',
-    textSecondary: '#9AA2B1',
-    textMuted: '#6B7280',
-    background: '#12151B',
-    backgroundElevated: '#1B1F27',
-    backgroundElement: '#232833',
+    text: '#F2F1EC',
+    textSecondary: '#A7ADBB',
+    textMuted: '#7A8291',
+    background: '#10131A',
+    backgroundElevated: '#171B24',
+    backgroundElement: '#20242F',
     backgroundSelected: '#2C323F',
-    border: '#323848',
-    accent: '#D98A4A',
-    accentPressed: '#C17A3E',
-    safety: '#C4544A',
+    border: '#2E3441',
+    accent: '#C77A3B',
+    accentPressed: '#A8632C',
+    safety: '#D3594B',
   },
 } as const;
 

@@ -116,6 +116,14 @@ export default function SettingsScreen() {
             </View>
           ))}
         </View>
+        <View style={styles.attribution}>
+          <ThemedText type="small" themeColor="textMuted" style={styles.attributionLine}>
+            Created by Wayne Parker — The Mindset Man
+          </ThemedText>
+          <ThemedText type="small" themeColor="textMuted" style={styles.attributionLine}>
+            AI-powered responses shaped by Wayne Parker&apos;s direct, grounded coaching approach.
+          </ThemedText>
+        </View>
       </ScrollView>
     </Screen>
   );
@@ -168,5 +176,13 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
+  },
+  attribution: {
+    alignItems: 'center',
+    gap: Spacing.one,
+    marginTop: Spacing.one,
+  },
+  attributionLine: {
+    textAlign: 'center',
   },
 });
