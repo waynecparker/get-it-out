@@ -8,12 +8,19 @@
     "scheme": "getitout",
     "userInterfaceStyle": "dark",
     "android": {
+      "package": "com.waynecparker.getitout",
       "adaptiveIcon": {
         "backgroundColor": "#10131A",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {
       "output": "static",
@@ -41,6 +48,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f153fa08-ca0a-4825-a08f-1099c8e4965c"
+      }
+    },
+    "owner": "mindsetmans-organization"
   }
 }
