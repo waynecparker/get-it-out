@@ -115,9 +115,22 @@ def fit(head, inner, lines, outer, stroke, content=None, radius=None):
 
 def f(p): return f"{p[0]:.2f} {p[1]:.2f}"
 
-def svg(background=True, letters_inside=True, mono=None, content=None, radius=None, stroke=15, title="ZXY to XYZ mark"):
+# Approved head-led Android launcher layout (2026-09-28): the head is scaled
+# 1.22x about the mouth, the copper speech mark is nudged 6 units up, then the
+# whole composition is re-centred and fitted to radius 305 inside the adaptive
+# safe zone (net: head +20.7%, speech mark 98.9% of its previous size).
+# Applied as group transforms on top of the radius=300 geometry — these exact
+# values are the approved composition; do not re-derive them.
+HEAD_LED = dict(
+    fit="translate(512 512) scale(0.9890) translate(-489 -480)",
+    head="translate(548 553) scale(1.22) translate(-548 -553)",
+    speech="translate(0 -6)",
+)
+
+def svg(background=True, letters_inside=True, mono=None, content=None, radius=None, stroke=15, title="ZXY to XYZ mark", head_led=False):
     """background: navy full-bleed square. letters_inside: False = simplified tier.
-    mono: a single colour for every element (Android themed-icon layer)."""
+    mono: a single colour for every element (Android themed-icon layer).
+    head_led: wrap the geometry in the approved HEAD_LED transforms."""
     head, inner, lines, outer = build()
     STROKE = stroke
     T, k = fit(head, inner, lines, outer, STROKE/2, content=content, radius=radius)
@@ -135,23 +148,30 @@ def svg(background=True, letters_inside=True, mono=None, content=None, radius=No
         u = unary_union([Polygon([T(p) for p in P]).buffer(0) for P in inner])
         geoms = getattr(u, "geoms", [u])
         holes = " " + " ".join("M " + " L ".join(f(p) for p in list(orient(g).exterior.coords)[:-1]) + " Z" for g in geoms)
+    defs = f'<defs><clipPath id="neck-cut"><rect x="0" y="0" width="{SIZE}" height="{cy:.2f}"/></clipPath></defs>'
+    head_el = f'<path id="head-with-ZXY-cutouts" fill="{head_c}" fill-rule="evenodd" clip-path="url(#neck-cut)" d="{" ".join(d)}{holes}"/>'
+    speech_el = f'<path id="speech" fill="none" stroke="{cop_c}" stroke-width="{sw}" stroke-linecap="round" d="{lines_d}"/>'
+    xyz_el = f'<path id="spoken-XYZ" fill="{cop_c}" d="{outer_d}"/>'
+    if head_led:
+        body = (f'  <g transform="{HEAD_LED["fit"]}">\n    {defs}\n'
+                f'    <g transform="{HEAD_LED["head"]}">\n      {head_el}\n    </g>\n'
+                f'    <g transform="{HEAD_LED["speech"]}">\n      {speech_el}\n      {xyz_el}\n    </g>\n  </g>\n')
+    else:
+        body = f"  {defs}\n  {head_el}\n  {speech_el}\n  {xyz_el}\n"
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SIZE} {SIZE}" width="{SIZE}" height="{SIZE}">
   <title>{title}</title>
-{bg}  <defs><clipPath id="neck-cut"><rect x="0" y="0" width="{SIZE}" height="{cy:.2f}"/></clipPath></defs>
-  <path id="head-with-ZXY-cutouts" fill="{head_c}" fill-rule="evenodd" clip-path="url(#neck-cut)" d="{' '.join(d)}{holes}"/>
-  <path id="speech" fill="none" stroke="{cop_c}" stroke-width="{sw}" stroke-linecap="round" d="{lines_d}"/>
-  <path id="spoken-XYZ" fill="{cop_c}" d="{outer_d}"/>
-</svg>
+{bg}{body}</svg>
 """
 
 # Production variants — spec: docs/visual-identity.md §2 and §6
 VARIANTS = {
     # full-bleed navy, full-detail
     "logo-master.svg":                 dict(),
-    # transparent, full-detail, inside Android adaptive safe circle (66/108 of canvas → r≈313; margin to 300)
-    "android-icon-foreground.svg":     dict(background=False, radius=300),
-    # single colour, simplified, same safe circle
-    "android-icon-monochrome.svg":     dict(background=False, letters_inside=False, mono="#FFFFFF", radius=300),
+    # transparent, full-detail, inside Android adaptive safe circle (66/108 of canvas → r≈313),
+    # approved head-led layout (fits to r=305)
+    "android-icon-foreground.svg":     dict(background=False, radius=300, head_led=True),
+    # single colour, simplified, same safe circle and head-led layout
+    "android-icon-monochrome.svg":     dict(background=False, letters_inside=False, mono="#FFFFFF", radius=300, head_led=True),
     # transparent, full-detail, tight crop (size set by imageWidth in app.json)
     "splash-icon.svg":                 dict(background=False, content=960),
     # navy, simplified, filled tighter for tiny renders
