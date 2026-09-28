@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { AudioPlayButton } from '@/components/audio-play-button';
@@ -68,6 +68,12 @@ export default function TalkScreen() {
   const [crisisStage, setCrisisStage] = useState<'handover' | 'stepdown' | 'closing' | null>(null);
 
   const [pulse] = useState(() => new Animated.Value(1));
+
+  // A fresh AI reply can land below the visible area after a long
+  // transcript. The reply's id is parked here until its bubble lays out,
+  // then the chat scrolls just far enough to show the START of the reply.
+  const chatScrollRef = useRef<ScrollView>(null);
+  const scrollToReplyIdRef = useRef<string | null>(null);
 
   // Registers a cleanup for this in-progress, unsaved conversation so
   // sign-out (from the Settings tab, which has no access to this local
@@ -168,10 +174,12 @@ export default function TalkScreen() {
         setCrisisStage('handover');
       }
       setAwaitingMeansCheck(reply.awaitingMeansCheck === true);
+      const replyId = makeId();
+      scrollToReplyIdRef.current = replyId;
       setMessages((prev) => [
         ...prev,
         {
-          id: makeId(),
+          id: replyId,
           role: 'assistant',
           content: reply.content,
           createdAt: new Date().toISOString(),
@@ -405,9 +413,17 @@ export default function TalkScreen() {
 
     return (
       <Screen noPadding>
-        <ScrollView contentContainerStyle={styles.chatContent}>
+        <ScrollView ref={chatScrollRef} contentContainerStyle={styles.chatContent}>
           {messages.map((message) => (
-            <View key={message.id}>
+            <View
+              key={message.id}
+              onLayout={(event) => {
+                if (message.id !== scrollToReplyIdRef.current) return;
+                scrollToReplyIdRef.current = null;
+                const y = Math.max(0, event.nativeEvent.layout.y - Spacing.three);
+                requestAnimationFrame(() => chatScrollRef.current?.scrollTo({ y, animated: true }));
+              }}
+            >
               <View
                 style={[
                   styles.bubble,
@@ -573,14 +589,14 @@ export default function TalkScreen() {
               </Button>
             </View>
             <View style={styles.doneRow}>
-              <Button variant="ghost" onPress={saveAndReset} disabled={isSaving}>
+              <Button variant="ghost" onPress={saveAndReset} disabled={isSaving} style={styles.compactGhost}>
                 {isSaving
                   ? 'Saving…'
                   : storagePreference === 'delete_after_session'
                     ? 'Done — nothing will be kept'
                     : 'Done — save to History'}
               </Button>
-              <Button variant="ghost" onPress={discardConversation} disabled={isSaving}>
+              <Button variant="ghost" onPress={discardConversation} disabled={isSaving} style={styles.compactGhost}>
                 Discard conversation
               </Button>
             </View>
@@ -688,7 +704,10 @@ const styles = StyleSheet.create({
   playbackRow: {
     marginBottom: Spacing.three,
   },
+  // flexShrink caps the box at the space left on screen, so a long
+  // transcript scrolls inside it instead of pushing the actions off-screen.
   transcriptInput: {
+    flexShrink: 1,
     minHeight: 140,
     borderRadius: Spacing.three,
     borderWidth: 1,
@@ -701,6 +720,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.three,
     marginTop: Spacing.four,
+    marginBottom: Spacing.three,
   },
   chatContent: {
     padding: Spacing.four,
@@ -736,7 +756,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.two,
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
+    paddingTop: Spacing.two,
     borderTopWidth: 1,
   },
   ventActions: {
@@ -766,7 +786,12 @@ const styles = StyleSheet.create({
   },
   doneRow: {
     alignItems: 'center',
-    paddingVertical: Spacing.two,
+    paddingVertical: Spacing.one,
+  },
+  // Tighter than the default button padding so the Done/Discard pair
+  // doesn't eat into the conversation area; still a comfortable tap size.
+  compactGhost: {
+    paddingVertical: Spacing.two + Spacing.half,
   },
   discardRow: {
     alignItems: 'center',
