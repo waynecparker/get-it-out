@@ -115,15 +115,16 @@ def fit(head, inner, lines, outer, stroke, content=None, radius=None):
 
 def f(p): return f"{p[0]:.2f} {p[1]:.2f}"
 
-# Approved head-led Android launcher layout (2026-09-28): the head is scaled
-# 1.22x about the mouth, the copper speech mark is nudged 6 units up, then the
-# whole composition is re-centred and fitted to radius 305 inside the adaptive
-# safe zone (net: head +20.7%, speech mark 98.9% of its previous size).
-# Applied as group transforms on top of the radius=300 geometry — these exact
-# values are the approved composition; do not re-derive them.
+# Approved head-led Android launcher layout (revised 2026-09-29, "Option C"):
+# the head is scaled 1.3725x about the mouth, the copper speech mark is nudged
+# 6 units up, then the whole composition is re-centred and fitted to radius 305
+# inside the adaptive safe zone (net vs. the original radius=300 mark: head
+# +27.2%, speech mark 92.7%). Applied as group transforms on top of the
+# radius=300 geometry — these exact values are the approved composition; do
+# not re-derive them.
 HEAD_LED = dict(
-    fit="translate(512 512) scale(0.9890) translate(-489 -480)",
-    head="translate(548 553) scale(1.22) translate(-548 -553)",
+    fit="translate(512 512) scale(0.9270) translate(-466 -479)",
+    head="translate(548 553) scale(1.3725) translate(-548 -553)",
     speech="translate(0 -6)",
 )
 
