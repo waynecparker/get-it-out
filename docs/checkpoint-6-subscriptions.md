@@ -1,6 +1,8 @@
 # Checkpoint 6 — Subscriptions, Founding Members and fair use
 
-Status: code complete on branch `checkpoint-6`. **Billing is switched off**
+Status: code complete on branch `checkpoint-6`. Migration
+`20261006120000` applied and all five Edge Functions deployed to the live
+Supabase project on 2026-10-07 (live checks passed). **Billing is switched off**
 in every build until the RevenueCat keys below are added, and server-side
 enforcement stays off until `SUBSCRIPTION_ENFORCEMENT=on`. Nothing here
 charges anyone until Wayne activates it.
@@ -75,10 +77,10 @@ never content.
 
 ## What Wayne needs to set up
 
-1. **Supabase access token** — the one in `.env` is no longer valid. Create
-   a new personal access token (Supabase dashboard → Account → Access
-   Tokens) and replace `SUPABASE_ACCESS_TOKEN` in `.env`. Needed to apply
-   the migration and deploy the functions.
+1. ~~Supabase access token~~ — done 2026-10-07. The new token can run SQL
+   and deploy functions but can't read/write Edge Function secrets, so
+   the secrets in step 4 need either a token with secrets permissions or
+   the dashboard (Edge Functions → Secrets).
 2. **Google Play Console** — app `com.waynecparker.getitout`, then two
    subscriptions, each with a monthly and an annual base plan at A$14.50 /
    A$145 and a 7-day free-trial offer:
@@ -94,7 +96,7 @@ never content.
    - offering `standard` (set as **current**) with the standard products
    - webhook URL `https://<project-ref>.supabase.co/functions/v1/revenuecat-webhook`
      with an Authorization header value you choose
-4. **Secrets** (I can set these once the token works):
+4. **Edge Function secrets** (dashboard → Edge Functions → Secrets):
    - `REVENUECAT_WEBHOOK_AUTH` = the webhook Authorization value
    - optional `REVENUECAT_SECRET_API_KEY` (lets account deletion also
      delete the RevenueCat customer)
