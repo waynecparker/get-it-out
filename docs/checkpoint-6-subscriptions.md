@@ -21,7 +21,7 @@ charges anyone until Wayne activates it.
 - No advertised usage limit, no top-ups; usage is metered internally with
   fair-use protection.
 
-### How the rules are implemented (interpretations to confirm)
+### How the rules are implemented (confirmed by Wayne 2026-10-07)
 
 - **Two sets of store products.** "Founder" products (monthly + annual)
   and "standard" products (monthly + annual), all A$14.50 / A$145 at
@@ -59,7 +59,7 @@ charges anyone until Wayne activates it.
 RevenueCat customer id = Supabase user id (`Purchases.logIn`), so a
 purchase always belongs to the signed-in account.
 
-## Fair-use defaults (internal, never advertised)
+## Fair-use defaults (internal, never advertised; confirmed 2026-10-07)
 
 Per user, rolling 24 hours, overridable with Edge Function secrets without
 a redeploy:
