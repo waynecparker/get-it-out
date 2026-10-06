@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { toServiceError } from '@/services/service-error';
 import { AIReply, AIResponseContext, AIResponseProvider, SafetyRiskLevel, SafetyRiskType } from '@/types/providers';
 
 interface RawResponse {
@@ -19,7 +20,7 @@ async function invokeAIResponse(context: AIResponseContext): Promise<AIReply> {
     },
   });
 
-  if (error) throw error;
+  if (error) throw await toServiceError(error);
   const raw = data as RawResponse;
   const riskLevel: SafetyRiskLevel =
     raw?.riskLevel === 'concerning' || raw?.riskLevel === 'immediate' ? raw.riskLevel : 'none';

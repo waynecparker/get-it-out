@@ -45,7 +45,7 @@ export default function PrivacyScreen() {
   function confirmDeleteAccount() {
     Alert.alert(
       'Delete your account?',
-      'This permanently deletes your account and everything you\'ve saved—recordings, transcripts and replies. This cannot be undone.',
+      'This permanently deletes your account and everything you\'ve saved—recordings, transcripts and replies. This cannot be undone.\n\nDeleting your account doesn\'t cancel a subscription. If you have one, cancel it in your App Store or Google Play subscription settings so you aren\'t charged again.',
       [
         { text: 'Keep my account', style: 'cancel' },
         {

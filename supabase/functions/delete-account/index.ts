@@ -64,6 +64,21 @@ Deno.serve(async (req) => {
       if (removeError) console.error('storage removal error during account deletion', removeError);
     }
 
+    // Remove the RevenueCat customer record too (purchase history tied to
+    // this user id). Best-effort, like storage above. This does NOT cancel
+    // an App Store / Google Play subscription — only the user can do that
+    // in their store settings, which the app tells them before deleting.
+    const revenueCatKey = Deno.env.get('REVENUECAT_SECRET_API_KEY');
+    if (revenueCatKey) {
+      const rcResponse = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(user.id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${revenueCatKey}` },
+      });
+      if (!rcResponse.ok && rcResponse.status !== 404) {
+        console.error('RevenueCat subscriber deletion failed', rcResponse.status);
+      }
+    }
+
     // Deleting the auth user cascades every owned DB row automatically.
     const { error: deleteUserError } = await adminClient.auth.admin.deleteUser(user.id);
     if (deleteUserError) throw deleteUserError;

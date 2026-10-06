@@ -8,15 +8,18 @@ import { Button } from '@/components/button';
 import { MicGlyph } from '@/components/mic-glyph';
 import { SafetyPanel } from '@/components/safety-panel';
 import { Screen } from '@/components/screen';
+import { SubscribeGate } from '@/components/subscribe-gate';
 import { ThemedText } from '@/components/themed-text';
 import { RESPONSE_MODE_LABELS } from '@/constants/response-modes';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useVoiceRecorder } from '@/hooks/use-voice-recorder';
 import { aiResponseProvider, transcriptionProvider } from '@/services/providers';
+import { ServiceError } from '@/services/service-error';
 import { registerActiveConversationCleanup } from '@/state/active-conversation-cleanup';
 import { useConversations } from '@/state/conversations-context';
 import { usePreferences } from '@/state/preferences-context';
+import { useSubscription } from '@/state/subscription-context';
 import { Conversation, Message, ResponseMode } from '@/types/conversation';
 import { AIResponseContext } from '@/types/providers';
 
@@ -42,6 +45,7 @@ export default function TalkScreen() {
   const theme = useTheme();
   const { addConversation } = useConversations();
   const { storagePreference } = usePreferences();
+  const subscription = useSubscription();
   const recorder = useVoiceRecorder();
   const [isSaving, setIsSaving] = useState(false);
 
@@ -140,10 +144,14 @@ export default function TalkScreen() {
       const text = await transcriptionProvider.transcribe(uri);
       setTranscript(text);
       setPhase('reviewing');
-    } catch {
+    } catch (error) {
       recorder.discard(uri);
       setAudioUri(null);
-      Alert.alert('Transcription failed', "Couldn't transcribe that recording — give it another go.");
+      if (error instanceof ServiceError) {
+        Alert.alert(error.code === 'fair_use' ? 'Easy there' : 'Subscription needed', error.message);
+      } else {
+        Alert.alert('Transcription failed', "Couldn't transcribe that recording — give it another go.");
+      }
       setPhase(backPhase);
     }
   }
@@ -186,7 +194,10 @@ export default function TalkScreen() {
           triggeredSafetyPanel: reply.riskLevel === 'immediate',
         },
       ]);
-    } catch {
+    } catch (error) {
+      if (error instanceof ServiceError) {
+        Alert.alert(error.code === 'fair_use' ? 'Easy there' : 'Subscription needed', error.message);
+      }
       setPendingReplyContext(requestContext);
     } finally {
       setIsRequestingReply(false);
@@ -607,6 +618,16 @@ export default function TalkScreen() {
   }
 
   const isRecordingOrPaused = phase === 'recording' || phase === 'paused';
+
+  // Only ever gate a fresh start — never interrupt a conversation in
+  // progress if access lapses mid-session.
+  if (phase === 'idle' && subscription.isReady && !subscription.hasAccess) {
+    return (
+      <Screen>
+        <SubscribeGate />
+      </Screen>
+    );
+  }
 
   return (
     <Screen>

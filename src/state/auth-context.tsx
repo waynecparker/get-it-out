@@ -44,17 +44,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
       session,
       isLoading,
       async signUp(email, password) {
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        // The 18+ confirmation checkbox is required to reach this call. It
+        // travels as signup metadata and the handle_new_user trigger saves
+        // it to profiles.age_confirmed — this works even when email
+        // confirmation means no session exists yet.
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { age_confirmed: true } },
+        });
         if (error) return { error: error.message };
-        if (data.session && data.user) {
-          // The 18+ confirmation checkbox is required to reach this call —
-          // record it now while we still have an authenticated session.
-          await supabase.from('profiles').update({ age_confirmed: true }).eq('id', data.user.id);
-        }
-        // New Supabase projects require email confirmation by default — in
-        // that case signUp succeeds but no session exists yet, so the
-        // profiles update above is skipped until Checkpoint 5 revisits
-        // first-login bootstrapping.
         return { error: null, needsEmailConfirmation: !data.session };
       },
       async signIn(email, password) {

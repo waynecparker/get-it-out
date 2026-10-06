@@ -6,8 +6,11 @@
 // Deliberately does not record anywhere that a risk was classified — an
 // unsaved conversation must leave no trace, including safety metadata.
 // The classification only persists at all if the user explicitly saves
-// the conversation (as messages.triggered_safety_panel).
+// the conversation (as messages.triggered_safety_panel). The only thing
+// recorded per call is an internal usage count (tokens, timestamp) in
+// usage_events, for cost tracking and fair use — never content or risk.
 import { corsHeaders } from '../_shared/cors.ts';
+import { adminClient, checkAccess, getCaller, json, recordUsage } from '../_shared/guard.ts';
 import { BASE_SYSTEM_PROMPT, MODE_ADDENDA } from './systemPrompt.ts';
 
 type ChatRole = 'user' | 'assistant';
@@ -88,6 +91,13 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const user = await getCaller(req);
+    if (!user) return json({ error: 'Not authenticated.' }, 401);
+
+    const admin = adminClient();
+    const denied = await checkAccess(admin, user.id, 'ai_response');
+    if (denied) return denied;
+
     const body: RequestBody = await req.json();
     const { transcript, history, responseMode, crisisModeActive } = body;
 
@@ -142,6 +152,11 @@ Deno.serve(async (req) => {
     }
 
     const result = await claudeResponse.json();
+    // Metering only — counts, never content.
+    await recordUsage(admin, user.id, 'ai_response', {
+      inputTokens: result.usage?.input_tokens,
+      outputTokens: result.usage?.output_tokens,
+    });
     // Other block types (e.g. "thinking") can precede the tool_use block —
     // find it by type rather than assuming position.
     const toolBlock = Array.isArray(result.content)

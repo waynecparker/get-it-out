@@ -1,6 +1,7 @@
 import { File } from 'expo-file-system';
 
 import { supabase } from '@/lib/supabase';
+import { toServiceError } from '@/services/service-error';
 import { TranscriptionProvider } from '@/types/providers';
 
 export const supabaseTranscriptionProvider: TranscriptionProvider = {
@@ -13,7 +14,7 @@ export const supabaseTranscriptionProvider: TranscriptionProvider = {
       headers: { 'Content-Type': 'audio/m4a' },
     });
 
-    if (error) throw error;
+    if (error) throw await toServiceError(error);
     return (data as { text?: string })?.text ?? '';
   },
 };

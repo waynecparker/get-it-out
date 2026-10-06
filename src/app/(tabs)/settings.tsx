@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
+import { SubscriptionSettings } from '@/components/subscription-settings';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -21,7 +22,6 @@ interface FutureRow {
 }
 
 const APP_ROWS: FutureRow[] = [
-  { label: 'Subscription status', note: 'Checkpoint 6' },
   { label: 'Export my data', note: 'Future' },
   { label: 'Listen to replies (spoken audio)', note: 'Future — off by default' },
 ];
@@ -59,6 +59,11 @@ export default function SettingsScreen() {
             <ThemedText style={[styles.rowLabel, { color: theme.safety }]}>Sign out</ThemedText>
           </Pressable>
         </View>
+
+        <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
+          SUBSCRIPTION
+        </ThemedText>
+        <SubscriptionSettings />
 
         <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
           DEFAULT STORAGE

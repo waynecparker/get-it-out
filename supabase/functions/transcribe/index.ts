@@ -3,6 +3,7 @@
 // already read from the local recording — see
 // src/services/supabase-transcription-provider.ts.
 import { corsHeaders } from '../_shared/cors.ts';
+import { adminClient, checkAccess, getCaller, json, recordUsage } from '../_shared/guard.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -10,26 +11,29 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const user = await getCaller(req);
+    if (!user) return json({ error: 'Not authenticated.' }, 401);
+
+    const admin = adminClient();
+    const denied = await checkAccess(admin, user.id, 'transcription');
+    if (denied) return denied;
+
     const audioBuffer = await req.arrayBuffer();
     if (audioBuffer.byteLength === 0) {
-      return new Response(JSON.stringify({ error: 'No audio received.' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return json({ error: 'No audio received.' }, 400);
     }
 
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiKey) {
-      return new Response(JSON.stringify({ error: 'Server not configured.' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return json({ error: 'Server not configured.' }, 500);
     }
 
     const whisperForm = new FormData();
     whisperForm.append('file', new Blob([audioBuffer], { type: 'audio/m4a' }), 'recording.m4a');
     whisperForm.append('model', 'whisper-1');
     whisperForm.append('language', 'en');
+    // verbose_json adds the audio duration, used for usage metering only.
+    whisperForm.append('response_format', 'verbose_json');
 
     const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
@@ -40,21 +44,16 @@ Deno.serve(async (req) => {
     if (!whisperResponse.ok) {
       const errorText = await whisperResponse.text();
       console.error('Whisper request failed', whisperResponse.status, errorText);
-      return new Response(JSON.stringify({ error: 'Transcription failed.' }), {
-        status: 502,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return json({ error: 'Transcription failed.' }, 502);
     }
 
     const result = await whisperResponse.json();
-    return new Response(JSON.stringify({ text: result.text ?? '' }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    await recordUsage(admin, user.id, 'transcription', {
+      audioSeconds: typeof result.duration === 'number' ? result.duration : undefined,
     });
+    return json({ text: result.text ?? '' });
   } catch (error) {
     console.error('transcribe function error', error);
-    return new Response(JSON.stringify({ error: 'Unexpected server error.' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return json({ error: 'Unexpected server error.' }, 500);
   }
 });

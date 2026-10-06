@@ -9,6 +9,7 @@ import { AuthProvider } from '@/state/auth-context';
 import { ConversationsProvider } from '@/state/conversations-context';
 import { PreferencesProvider } from '@/state/preferences-context';
 import { cleanupAbandonedTempRecordings } from '@/state/startup-cleanup';
+import { SubscriptionProvider } from '@/state/subscription-context';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -45,6 +46,7 @@ function AppNavigator() {
           headerBackTitle: 'History',
         }}
       />
+      <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
       <Stack.Screen
         name="privacy"
         options={{
@@ -66,13 +68,15 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={NavigationTheme}>
       <AuthProvider>
-        <PreferencesProvider>
-          <ConversationsProvider>
-            <AppLockProvider>
-              <AppNavigator />
-            </AppLockProvider>
-          </ConversationsProvider>
-        </PreferencesProvider>
+        <SubscriptionProvider>
+          <PreferencesProvider>
+            <ConversationsProvider>
+              <AppLockProvider>
+                <AppNavigator />
+              </AppLockProvider>
+            </ConversationsProvider>
+          </PreferencesProvider>
+        </SubscriptionProvider>
       </AuthProvider>
     </ThemeProvider>
   );
