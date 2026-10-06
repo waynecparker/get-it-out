@@ -74,7 +74,14 @@ Deno.serve(async (req) => {
   }
 
   const admin = adminClient();
-  const userId = resolveUserId(event);
+  // Only link the event to a user that actually exists. RevenueCat's
+  // dashboard test events use made-up ids, and a user may have deleted
+  // their account before a late event arrives — both must not fail.
+  let userId = resolveUserId(event);
+  if (userId) {
+    const { data: profile } = await admin.from('profiles').select('id').eq('id', userId).maybeSingle();
+    if (!profile) userId = null;
+  }
 
   // Idempotency: RevenueCat retries until it gets a 2xx.
   const { error: logError } = await admin
@@ -104,7 +111,7 @@ Deno.serve(async (req) => {
     }
 
     if (!userId) {
-      console.warn('event without a Supabase user id', event.type, event.id);
+      console.warn('event without a known Supabase user', event.type, event.id);
       return json({ ok: true, ignored: 'no user' });
     }
 
