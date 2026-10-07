@@ -111,6 +111,18 @@ never content.
 7. **Legal pages** — published Terms and Privacy URLs (Apple requires them
    on the paywall).
 
+## RevenueCat Test Store (configured 2026-10-07)
+
+Used for on-device testing before Google Play exists. Same identifiers as
+production: entitlement `access`, offerings `founder` + `standard`
+(current), products `getitout_{founder,standard}_{monthly,annual}` with
+7-day trials. The Test Store locks every price at **USD 0.99** — expected,
+not a bug; real AUD prices come from Google Play. The Test Store key is set
+only in the EAS **preview** environment, and preview APKs are made
+debuggable (`plugins/with-debuggable-preview.js`) because RevenueCat
+refuses a test key in non-debuggable builds. Never put a `test_` key in
+production.
+
 ## Test plan once the accounts exist
 
 Sandbox only (Play license testers / Apple sandbox), per
