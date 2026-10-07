@@ -10,14 +10,17 @@ charges anyone until Wayne activates it.
 ## Commercial rules (approved 2026-09-29)
 
 - A$14.50/month or A$145/year, 7-day free trial, no free tier, 18+.
-- The first 500 **paying** subscribers are Founding Members. Trials don't
+- The first 100 **paying** subscribers are Founding Members (initial
+  release; corrected from 500 on 2026-10-07). Trials don't
   count until they convert.
 - Founders keep the founding price while eligible and can switch
   monthly ↔ annual without losing status.
 - 90-day grace period to recover founder status after the subscription
   ends.
 - Subscriber 501+ gets the same launch price, but not grandfathered.
-- Founder status closes automatically after #500.
+- Founder status closes automatically after #100. The limit is
+  `founder_program.cap` in the database (display text: `FOUNDER_CAP` in
+  `src/constants/billing.ts`) — change both together.
 - No advertised usage limit, no top-ups; usage is metered internally with
   fair-use protection.
 
@@ -33,7 +36,7 @@ charges anyone until Wayne activates it.
   account, and not when one loses founder status after the grace period.
 - **Slot holds.** While someone is at checkout (1 hour) or in a free trial
   on a founder product (until the trial ends + 2 days), their founder slot
-  is held. Founder products are only offered while founders + holds < 500,
+  is held. Founder products are only offered while founders + holds < 100,
   so they can never be oversold.
 - **The 90 days start when access actually ends** (RevenueCat
   `EXPIRATION`), not when the user turns off auto-renew. Turning off

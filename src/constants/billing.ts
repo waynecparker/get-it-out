@@ -15,7 +15,8 @@ export const OFFERING_IDS = {
 export type OfferingKind = keyof typeof OFFERING_IDS;
 
 export const TRIAL_DAYS = 7;
-export const FOUNDER_CAP = 500;
+// Display only — the enforced limit is founder_program.cap in the database.
+export const FOUNDER_CAP = 100;
 
 // Shown only if the store price can't be loaded.
 export const FALLBACK_PRICES = {
