@@ -144,7 +144,10 @@ Deno.serve(async (req) => {
     if (ACTIVE_TYPES.has(event.type)) {
       Object.assign(update, {
         entitlement_active: stillValid,
-        status: isTrial ? 'trialing' : 'active',
+        // A renewal can arrive in the same second as (or after) the
+        // EXPIRATION for a period that has already ended — never label an
+        // ended period "active".
+        status: !stillValid ? 'expired' : isTrial ? 'trialing' : 'active',
         plan: founderProduct ? 'founding' : 'standard',
         product_id: productId ?? null,
         period_type: event.period_type?.toLowerCase() ?? null,
