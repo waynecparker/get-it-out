@@ -43,7 +43,8 @@
         }
       ],
       "expo-asset",
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/with-debuggable-preview"
     ],
     "experiments": {
       "typedRoutes": true,
