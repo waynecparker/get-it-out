@@ -1,4 +1,4 @@
-import { createContext, PropsWithChildren, use, useCallback, useEffect, useMemo, useState } from 'react';
+import { createContext, PropsWithChildren, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Purchases, {
   CustomerInfo,
   PURCHASES_ERROR_CODE,
@@ -55,8 +55,11 @@ async function fetchServerStatus(action: 'status' | 'offer') {
 }
 
 export function SubscriptionProvider({ children }: PropsWithChildren) {
-  const { session } = useAuth();
+  const { session, isLoading: isAuthLoading } = useAuth();
   const userId = session?.user.id ?? null;
+  // The last user RevenueCat was logged in as, so only a real sign-out
+  // (a signed-in user becoming signed out) logs RevenueCat out.
+  const previousUserRef = useRef<string | null>(null);
 
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   // Tagged with the user it belongs to, so a previous account's founder
@@ -77,10 +80,17 @@ export function SubscriptionProvider({ children }: PropsWithChildren) {
 
   // Keep RevenueCat's customer id in lockstep with the Supabase user, so a
   // purchase always belongs to the account that made it.
+  //
+  // Waits for the auth session to load first: during that moment userId is
+  // briefly null, and logging RevenueCat out then raced the logIn that
+  // follows, leaving purchases on an anonymous id (seen on device
+  // 2026-10-07 after an app restart).
   useEffect(() => {
-    if (!isBillingEnabled) return;
+    if (!isBillingEnabled || isAuthLoading) return;
     ensureRevenueCatConfigured();
     let cancelled = false;
+    const previousUser = previousUserRef.current;
+    previousUserRef.current = userId;
 
     (async () => {
       try {
@@ -88,7 +98,7 @@ export function SubscriptionProvider({ children }: PropsWithChildren) {
           const { customerInfo: info } = await Purchases.logIn(userId);
           if (!cancelled) setCustomerInfo(info);
         } else {
-          if (!(await Purchases.isAnonymous())) await Purchases.logOut();
+          if (previousUser && !(await Purchases.isAnonymous())) await Purchases.logOut();
           if (!cancelled) setCustomerInfo(null);
         }
       } catch {
@@ -101,6 +111,17 @@ export function SubscriptionProvider({ children }: PropsWithChildren) {
     return () => {
       cancelled = true;
     };
+  }, [userId, isAuthLoading]);
+
+  // Safety net before any purchase or restore: make sure RevenueCat is using
+  // the signed-in account's id, so a purchase can never land on an
+  // anonymous id even if the startup sync above hasn't finished.
+  const ensureIdentity = useCallback(async () => {
+    if (!userId) throw new Error('Please sign in first.');
+    if ((await Purchases.getAppUserID()) !== userId) {
+      const { customerInfo: info } = await Purchases.logIn(userId);
+      setCustomerInfo(info);
+    }
   }, [userId]);
 
   // RevenueCat pushes every subscription change (trial conversion, renewal,
@@ -180,6 +201,7 @@ export function SubscriptionProvider({ children }: PropsWithChildren) {
       loadOffer,
       async purchase(pkg) {
         try {
+          await ensureIdentity();
           const { customerInfo: info } = await Purchases.purchasePackage(pkg);
           setCustomerInfo(info);
           refreshServerStatus();
@@ -192,6 +214,7 @@ export function SubscriptionProvider({ children }: PropsWithChildren) {
       },
       async restore() {
         try {
+          await ensureIdentity();
           const info = await Purchases.restorePurchases();
           setCustomerInfo(info);
           refreshServerStatus();
@@ -204,7 +227,7 @@ export function SubscriptionProvider({ children }: PropsWithChildren) {
         await Purchases.showManageSubscriptions();
       },
     }),
-    [customerInfo, serverStatus, readyForUser, userId, refresh, refreshServerStatus, loadOffer],
+    [customerInfo, serverStatus, readyForUser, userId, refresh, refreshServerStatus, loadOffer, ensureIdentity],
   );
 
   return <SubscriptionContext value={value}>{children}</SubscriptionContext>;
