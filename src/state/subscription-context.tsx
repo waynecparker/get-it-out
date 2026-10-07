@@ -140,6 +140,26 @@ export function SubscriptionProvider({ children }: PropsWithChildren) {
     await refreshServerStatus();
   }, [refreshServerStatus]);
 
+  // Stable per user, so the paywall asks for its offer exactly once per
+  // visit. (It used to be recreated on every state change, which re-ran the
+  // paywall's effect and discarded the founder answer — reported 2026-10-07.)
+  const loadOffer = useCallback(async () => {
+    let kind: OfferingKind = 'standard';
+    try {
+      const status = await fetchServerStatus('offer');
+      kind = status.offering === 'founder' ? 'founder' : 'standard';
+      if (userId) setServerState({ userId, status: { foundersOpen: status.foundersOpen, founder: status.founder } });
+    } catch {
+      // Server unreachable: fall back to RevenueCat's current offering.
+    }
+    if (!isBillingEnabled) return { kind, offering: null };
+    const offerings = await Purchases.getOfferings();
+    const wanted = offerings.all[OFFERING_IDS[kind]];
+    // Only claim founder pricing if the founder offering really exists.
+    if (!wanted) return { kind: 'standard' as OfferingKind, offering: offerings.current };
+    return { kind, offering: wanted };
+  }, [userId]);
+
   const value = useMemo<SubscriptionContextValue>(
     () => ({
       billingEnabled: isBillingEnabled,
@@ -150,19 +170,7 @@ export function SubscriptionProvider({ children }: PropsWithChildren) {
       customerInfo,
       serverStatus,
       refresh,
-      async loadOffer() {
-        let kind: OfferingKind = 'standard';
-        try {
-          const status = await fetchServerStatus('offer');
-          kind = status.offering === 'founder' ? 'founder' : 'standard';
-          if (userId) setServerState({ userId, status: { foundersOpen: status.foundersOpen, founder: status.founder } });
-        } catch {
-          // Server unreachable: fall back to RevenueCat's current offering.
-        }
-        if (!isBillingEnabled) return { kind, offering: null };
-        const offerings = await Purchases.getOfferings();
-        return { kind, offering: offerings.all[OFFERING_IDS[kind]] ?? offerings.current };
-      },
+      loadOffer,
       async purchase(pkg) {
         try {
           const { customerInfo: info } = await Purchases.purchasePackage(pkg);
@@ -189,7 +197,7 @@ export function SubscriptionProvider({ children }: PropsWithChildren) {
         await Purchases.showManageSubscriptions();
       },
     }),
-    [customerInfo, serverStatus, readyForUser, userId, refresh, refreshServerStatus],
+    [customerInfo, serverStatus, readyForUser, userId, refresh, refreshServerStatus, loadOffer],
   );
 
   return <SubscriptionContext value={value}>{children}</SubscriptionContext>;
