@@ -103,15 +103,22 @@ export function SubscriptionProvider({ children }: PropsWithChildren) {
     };
   }, [userId]);
 
+  // RevenueCat pushes every subscription change (trial conversion, renewal,
+  // expiry). Those are exactly the moments founder status can change on the
+  // server, so re-fetch it too — otherwise a founder number assigned by the
+  // webhook after a trial converts only shows after an app restart.
   useEffect(() => {
     if (!isBillingEnabled) return;
     ensureRevenueCatConfigured();
-    const listener = (info: CustomerInfo) => setCustomerInfo(info);
+    const listener = (info: CustomerInfo) => {
+      setCustomerInfo(info);
+      refreshServerStatus();
+    };
     Purchases.addCustomerInfoUpdateListener(listener);
     return () => {
       Purchases.removeCustomerInfoUpdateListener(listener);
     };
-  }, []);
+  }, [refreshServerStatus]);
 
   useEffect(() => {
     if (!userId) return;

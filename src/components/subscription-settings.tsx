@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -16,8 +16,15 @@ function formatDate(iso: string) {
 // and the manage / restore actions.
 export function SubscriptionSettings() {
   const theme = useTheme();
-  const { billingEnabled, customerInfo, serverStatus, manage, restore } = useSubscription();
+  const { billingEnabled, customerInfo, serverStatus, manage, restore, refresh } = useSubscription();
   const [isRestoring, setIsRestoring] = useState(false);
+
+  // Fresh subscription + founder status every time Settings opens.
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh]),
+  );
 
   const entitlement = customerInfo?.entitlements.active[ENTITLEMENT_ID];
   const founder = serverStatus?.founder;
